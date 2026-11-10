@@ -1,0 +1,19 @@
+{
+  "name": "uajm-esport",
+  "version": "1.0.0",
+  "description": "Sistem bagan turnamen resmi dan rundown kompetisi UKM Esport UAJM 2026",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "esport",
+    "tournament",
+    "bracket",
+    "uajm",
+    "challonge",
+    "mobile-legends"
+  ],
+  "author": "UKM Esport UAJM",
+  "license": "MIT"
+}
