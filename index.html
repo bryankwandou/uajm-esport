@@ -144,9 +144,19 @@
           <span class="pill" style="align-self:flex-start" data-i18n="live"></span>
           <h3>Semifinals &middot; 3rd Place &middot; Grand Final</h3>
           <p>11 &ndash; 12 Nov 2026 &middot; 18.30 WIB</p>
-          <div><a class="btn btn-primary" style="background:#f3efe9;color:#0f0e0d" href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" data-i18n="watch"></a></div>
+          <div><a class="btn btn-primary" id="hero-stream-btn" style="background:#f3efe9;color:#0f0e0d" href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" data-i18n="watch"></a></div>
         </div>
-        <div class="list" id="stream-list" style="margin-top:24px"></div>
+
+        <div style="margin-top:36px">
+          <h3 style="font-family:var(--font-display);font-size:26px;font-weight:400;margin-bottom:6px" data-i18n="liveChannels"></h3>
+          <p class="view-sub" style="margin-bottom:16px">Saluran siaran langsung resmi. Channel yang belum melakukan siaran berstatus tidak aktif.</p>
+          <div class="channels-grid" id="channels-grid"></div>
+        </div>
+
+        <div style="margin-top:40px">
+          <h3 style="font-family:var(--font-display);font-size:24px;font-weight:400;margin-bottom:12px">Jadwal Pertandingan yang Disiarkan</h3>
+          <div class="list" id="stream-list"></div>
+        </div>
       </div>
     </section>
   </main>

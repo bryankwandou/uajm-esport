@@ -3,17 +3,33 @@ import { TOURNAMENT_INFO, BRACKET_MATCHES } from './bracket-data.js';
 import { TEAMS_DATA } from './teams-data.js';
 
 export const DB_ROOT = `${TOURNAMENT_INFO.firebaseDatabaseUrl}/uajm`;
-const CACHE_KEY = 'uajm_state_v2';
+const CACHE_KEY = 'uajm_state_v3';
+
+export const DEFAULT_STREAMS = {
+  youtube: '',
+  instagram: '',
+  tiktok: '',
+  twitch: '',
+  prism: ''
+};
 
 export function emptyState() {
-  return { teams: {}, results: {} };
+  return {
+    teams: {},
+    results: {},
+    streams: { ...DEFAULT_STREAMS }
+  };
 }
 
 export function readCache() {
   try {
     const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (parsed && typeof parsed === 'object') {
-      return { teams: parsed.teams || {}, results: parsed.results || {} };
+      return {
+        teams: parsed.teams || {},
+        results: parsed.results || {},
+        streams: Object.assign({ ...DEFAULT_STREAMS }, parsed.streams || {})
+      };
     }
   } catch {
     localStorage.removeItem(CACHE_KEY);
@@ -29,7 +45,11 @@ export async function fetchRemote() {
   const response = await fetch(`${DB_ROOT}.json`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const data = (await response.json()) || {};
-  return { teams: data.teams || {}, results: data.results || {} };
+  return {
+    teams: data.teams || {},
+    results: data.results || {},
+    streams: Object.assign({ ...DEFAULT_STREAMS }, data.streams || {})
+  };
 }
 
 export function subscribeRemote(onChange) {
@@ -53,8 +73,6 @@ export function teamMeta(teamId) {
 }
 
 // Mengembalikan daftar pertandingan dengan ID tim yang sudah diselesaikan.
-// Hasil disimpan sebagai indeks slot pemenang (0 atau 1) sehingga
-// perubahan nama tim tidak memutus jalur bracket.
 export function resolveMatches(state) {
   const resolved = new Map();
   const slotTeam = (definition) => {

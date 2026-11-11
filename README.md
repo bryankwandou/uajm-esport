@@ -70,3 +70,4 @@ uajm-esport/
 ## Lisensi
 
 Didistribusikan di bawah lisensi MIT untuk UKM Esport UAJM.
+

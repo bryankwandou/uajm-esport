@@ -307,7 +307,87 @@ function renderRules() {
 }
 
 /* ---------- Stream ---------- */
+const CHANNELS_CONFIG = [
+  {
+    key: 'youtube',
+    name: 'YouTube Live',
+    color: '#ef4444',
+    svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>'
+  },
+  {
+    key: 'instagram',
+    name: 'Instagram Live',
+    color: '#e1306c',
+    svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>'
+  },
+  {
+    key: 'tiktok',
+    name: 'TikTok Live',
+    color: '#06b6d4',
+    svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.82 4.49 6.3 6.3 0 0 0 1.87-4.49V8.82a8.28 8.28 0 0 0 4.9 1.58V6.95a4.83 4.83 0 0 1-1-.26z"/></svg>'
+  },
+  {
+    key: 'twitch',
+    name: 'Twitch',
+    color: '#9333ea',
+    svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.149 0l-1.612 4.119v16.036h5.051v3.845h3.819l3.842-3.845h4.821l5.93-5.928V0H2.149zm19.641 13.411l-3.568 3.568h-5.051l-3.328 3.328v-3.328H5.661V1.9h16.129v11.511z"/><path d="M10.866 5.228h2.378v6.892h-2.378zm5.952 0h2.378v6.892h-2.378z"/></svg>'
+  },
+  {
+    key: 'prism',
+    name: 'PRISM Live',
+    color: '#0d9488',
+    svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polygon points="2 17 12 22 22 17 12 12 2 17"/><polygon points="2 12 12 17 22 12 12 7 2 12"/></svg>'
+  }
+];
+
 function renderStream() {
+  const container = $('#channels-grid');
+  if (container) {
+    const streams = ui.data.streams || {};
+    container.innerHTML = CHANNELS_CONFIG.map(ch => {
+      const url = (streams[ch.key] || '').trim();
+      const isActive = Boolean(url && url.length > 5);
+      const tag = isActive ? 'a' : 'div';
+      const hrefAttr = isActive ? `href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"` : 'aria-disabled="true"';
+      const statusPill = isActive
+        ? `<span class="pill-live"><i></i>${escapeHtml(ui.t.liveActive || 'LIVE')}</span>`
+        : `<span class="pill-offline">${escapeHtml(ui.t.liveInactive || 'OFFLINE')}</span>`;
+      const actionText = isActive
+        ? `${escapeHtml(ui.t.openStream || 'Buka Siaran')} &rarr;`
+        : `${escapeHtml(ui.t.streamOffline || 'Siaran tidak aktif')}`;
+
+      return `
+        <${tag} class="channel-card ${isActive ? 'active' : 'inactive'}" ${hrefAttr}>
+          <div class="channel-head">
+            <div class="channel-brand">
+              <span class="channel-icon" style="color:${ch.color}">${ch.svg}</span>
+              <span>${escapeHtml(ch.name)}</span>
+            </div>
+            ${statusPill}
+          </div>
+          <div class="channel-action">
+            <span>${actionText}</span>
+          </div>
+        </${tag}>
+      `;
+    }).join('');
+  }
+
+  const heroBtn = $('#hero-stream-btn');
+  if (heroBtn) {
+    const streams = ui.data.streams || {};
+    const firstActive = Object.values(streams).find(u => u && u.trim().length > 5);
+    if (firstActive) {
+      heroBtn.href = firstActive;
+      heroBtn.style.pointerEvents = 'auto';
+      heroBtn.style.opacity = '1';
+    } else {
+      heroBtn.removeAttribute('href');
+      heroBtn.style.pointerEvents = 'none';
+      heroBtn.style.opacity = '0.5';
+    }
+  }
+
   $('#stream-list').innerHTML = [...ui.resolved.values()].filter(match => match.stream).map(listItemHtml).join('');
 }
 

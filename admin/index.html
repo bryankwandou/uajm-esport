@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id" data-theme="light">
 <head>
   <meta charset="UTF-8">
@@ -71,8 +71,10 @@
       <div class="tabs" style="margin-bottom:24px">
         <button class="tab active" data-panel="teams">Nama Tim</button>
         <button class="tab" data-panel="results">Hasil Pertandingan</button>
+        <button class="tab" data-panel="streams">Link Siaran Langsung</button>
       </div>
 
+      <!-- Tab 1: Teams -->
       <div id="panel-teams">
         <div class="admin-bar">
           <p class="view-sub">Nama tim default kosong. Isi sesuai seed, lalu simpan.</p>
@@ -90,6 +92,7 @@
         <div class="team-edit" id="team-edit"></div>
       </div>
 
+      <!-- Tab 2: Results -->
       <div id="panel-results" class="hidden">
         <div class="admin-bar">
           <select class="select" id="round-filter">
@@ -101,6 +104,43 @@
         </div>
         <p class="view-sub" style="margin-bottom:12px">Klik nama tim untuk menetapkan pemenang. Reset akan menghapus hasil laga lanjutan yang bergantung padanya.</p>
         <div id="result-list"></div>
+      </div>
+
+      <!-- Tab 3: Streams -->
+      <div id="panel-streams" class="hidden">
+        <div class="admin-bar">
+          <div>
+            <h2 class="view-title" style="font-size:24px">Pengaturan Link Siaran Langsung (5 Channel)</h2>
+            <p class="view-sub">Atur link siaran langsung channel. Jika link dikosongkan, channel otomatis nonaktif dan tidak bisa diklik di halaman publik.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" id="clear-streams">Kosongkan Semua</button>
+            <button class="btn btn-primary btn-sm" id="save-streams">Simpan Link Siaran</button>
+          </div>
+        </div>
+
+        <div class="card" style="display:grid;gap:16px;max-width:680px">
+          <label class="field">
+            <span>Link Live YouTube</span>
+            <input class="input" id="stream-youtube" placeholder="https://youtube.com/live/... atau https://youtube.com/@channel/live" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Link Live Instagram (IG)</span>
+            <input class="input" id="stream-instagram" placeholder="https://instagram.com/akun/live" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Link Live TikTok</span>
+            <input class="input" id="stream-tiktok" placeholder="https://tiktok.com/@akun/live" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Link Live Twitch</span>
+            <input class="input" id="stream-twitch" placeholder="https://twitch.tv/channel" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Link Live PRISM Live Studio</span>
+            <input class="input" id="stream-prism" placeholder="https://prismlive.com/..." autocomplete="off">
+          </label>
+        </div>
       </div>
     </section>
   </main>

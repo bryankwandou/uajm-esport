@@ -1,4 +1,4 @@
-﻿import { TEAMS_DATA } from '../teams-data.js';
+import { TEAMS_DATA } from '../teams-data.js';
 import {
   DB_ROOT, readCache, writeCache, fetchRemote, subscribeRemote,
   resolveMatches, teamName, teamMeta, downstreamMatches, escapeHtml
@@ -74,6 +74,7 @@ async function loadData() {
   }
   renderTeams();
   renderResults();
+  renderStreams();
 }
 
 async function remoteWrite(path, method, body) {
@@ -126,6 +127,36 @@ function applyBulk() {
   showToast('Diterapkan ke form. Tekan Simpan untuk menerbitkan.');
 }
 
+/* ---------- Streams Management ---------- */
+function renderStreams() {
+  const s = admin.data.streams || {};
+  $('#stream-youtube').value = s.youtube || '';
+  $('#stream-instagram').value = s.instagram || '';
+  $('#stream-tiktok').value = s.tiktok || '';
+  $('#stream-twitch').value = s.twitch || '';
+  $('#stream-prism').value = s.prism || '';
+}
+
+async function saveStreams() {
+  const streams = {
+    youtube: ($('#stream-youtube').value || '').trim(),
+    instagram: ($('#stream-instagram').value || '').trim(),
+    tiktok: ($('#stream-tiktok').value || '').trim(),
+    twitch: ($('#stream-twitch').value || '').trim(),
+    prism: ($('#stream-prism').value || '').trim()
+  };
+  admin.data.streams = streams;
+  writeCache(admin.data);
+  try {
+    await remoteWrite('streams', 'PUT', streams);
+    setSync(true);
+    showToast('Link siaran langsung berhasil disimpan');
+  } catch {
+    setSync(false);
+    showToast('Gagal menyimpan ke database');
+  }
+}
+
 /* ---------- Results ---------- */
 function renderResults() {
   const resolved = resolveMatches(admin.data);
@@ -141,7 +172,7 @@ function renderResults() {
       return `<button class="pick ${match.winnerSlot === slot ? 'on' : ''}" data-match="${match.id}" data-slot="${slot}" ${ready ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
     };
     return `<div class="result-row">
-      <span class="meta">${match.id} Â· ${match.round}<br>${match.time} Â· ${match.format}</span>
+      <span class="meta">${match.id} · ${match.round}<br>${match.time} · ${match.format}</span>
       ${pick(0)}${pick(1)}
       <button class="btn btn-ghost btn-sm" data-reset="${match.id}" ${match.done ? '' : 'disabled'}>Reset</button>
     </div>`;
@@ -196,7 +227,9 @@ function boot() {
     document.querySelectorAll('[data-panel]').forEach(other => other.classList.toggle('active', other === tab));
     $('#panel-teams').classList.toggle('hidden', tab.dataset.panel !== 'teams');
     $('#panel-results').classList.toggle('hidden', tab.dataset.panel !== 'results');
+    $('#panel-streams').classList.toggle('hidden', tab.dataset.panel !== 'streams');
     if (tab.dataset.panel === 'results') renderResults();
+    if (tab.dataset.panel === 'streams') renderStreams();
   }));
   $('#save-teams').addEventListener('click', saveTeams);
   $('#bulk-toggle').addEventListener('click', () => $('#bulk-box').classList.toggle('hidden'));
@@ -205,6 +238,15 @@ function boot() {
     if (!confirm('Kosongkan semua nama tim di form? Perubahan baru terbit setelah Simpan.')) return;
     document.querySelectorAll('#team-edit input').forEach(input => { input.value = ''; });
   });
+
+  $('#save-streams').addEventListener('click', saveStreams);
+  $('#clear-streams').addEventListener('click', () => {
+    if (!confirm('Kosongkan semua link siaran langsung? Channel akan berstatus offline di halaman publik.')) return;
+    ['#stream-youtube', '#stream-instagram', '#stream-tiktok', '#stream-twitch', '#stream-prism'].forEach(sel => {
+      $(sel).value = '';
+    });
+  });
+
   $('#round-filter').addEventListener('change', event => { admin.round = event.target.value; renderResults(); });
   $('#result-list').addEventListener('click', event => {
     const pick = event.target.closest('[data-slot]');
@@ -216,7 +258,12 @@ function boot() {
   const user = sessionStorage.getItem(SESSION_KEY);
   if (user && ACCOUNT_HASHES[user]) {
     enterPanel(user);
-    subscribeRemote(data => { admin.data = data; writeCache(data); renderResults(); });
+    subscribeRemote(data => {
+      admin.data = data;
+      writeCache(data);
+      renderResults();
+      renderStreams();
+    });
   }
 }
 

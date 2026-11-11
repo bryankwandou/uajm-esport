@@ -219,3 +219,4 @@ export const TOURNAMENT_RULES = [
     ]
   }
 ];
+
