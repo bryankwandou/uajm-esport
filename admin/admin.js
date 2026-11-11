@@ -1,369 +1,223 @@
-import { TOURNAMENT_INFO, BRACKET_MATCHES } from '../bracket-data.js';
-import { TEAMS_DATA } from '../teams-data.js';
+﻿import { TEAMS_DATA } from '../teams-data.js';
+import {
+  DB_ROOT, readCache, writeCache, fetchRemote, subscribeRemote,
+  resolveMatches, teamName, teamMeta, downstreamMatches, escapeHtml
+} from '../core.js';
 
-const state = {
-  isAuthenticated: false,
-  results: {},
-  filterRound: 'all'
+// Akun panitia disimpan sebagai hash SHA-256 dari "uajm-esport:<username>:<password>".
+const ACCOUNT_HASHES = {
+  athallah: '697684fefde11876927a3278268f5e991ef060fcf19eda3506509de002a9f97d',
+  putra: '0d17d2cbf4eaefb03b9f95a65471eddd82f241aa5d34c47740f9826122adaf2d',
+  nayrbryanGaming: '6f3d799f654a8ee3d7f3f0019f002185bb09831820f0d06a31e89f7f1a1bb3d2',
+  nayrbryaGaming: '7a6378bac310002782c40b675645804009d38753f91d6bf281a53e7b0221a764',
+  anneliese: '7b8b8fec48fe0afc70afe1f57f5c2e64963e9b1ca6d5307134b031421632a488'
 };
+const SESSION_KEY = 'uajm_admin_user';
 
-const TEAMS_MAP = new Map(TEAMS_DATA.map(team => [team.name.toLowerCase().trim(), team]));
+const admin = { data: readCache(), round: 'all' };
+const $ = (selector) => document.querySelector(selector);
 
-function getTeamSeed(teamName) {
-  if (!teamName || teamName === 'TBD' || teamName.startsWith('Winner ') || teamName.startsWith('Loser ')) {
-    return '-';
-  }
-  const clean = teamName.toLowerCase().trim();
-  const found = TEAMS_MAP.get(clean);
-  if (found) {
-    return found.seed;
-  }
-  return '-';
-}
-
-function resolveMatchSlot(slotDef, currentResults) {
-  if (typeof slotDef === 'string') {
-    return slotDef;
-  }
-  if (!slotDef || typeof slotDef !== 'object') {
-    return 'TBD';
-  }
-  if (slotDef.w) {
-    const parent = currentResults[slotDef.w];
-    if (parent && parent.winner) {
-      return parent.winner;
-    }
-    return `Winner ${slotDef.w}`;
-  }
-  if (slotDef.l) {
-    const parent = currentResults[slotDef.l];
-    if (parent && parent.loser) {
-      return parent.loser;
-    }
-    return `Loser ${slotDef.l}`;
-  }
-  return 'TBD';
-}
-
-function computeAllMatches(rawMatches, currentResults) {
-  const resolved = [];
-  for (const match of rawMatches) {
-    const team0 = resolveMatchSlot(match.s0, currentResults);
-    const team1 = resolveMatchSlot(match.s1, currentResults);
-    const result = currentResults[match.id] || null;
-    const winner = result ? result.winner : null;
-    const loser = result ? result.loser : null;
-    const score0 = result && typeof result.score0 === 'number' ? result.score0 : (winner === team0 ? 1 : 0);
-    const score1 = result && typeof result.score1 === 'number' ? result.score1 : (winner === team1 ? 1 : 0);
-    const isCompleted = Boolean(winner);
-
-    resolved.push({
-      ...match,
-      resolvedTeam0: team0,
-      resolvedTeam1: team1,
-      seed0: getTeamSeed(team0),
-      seed1: getTeamSeed(team1),
-      winner,
-      loser,
-      score0,
-      score1,
-      isCompleted
-    });
-  }
-  return resolved;
-}
-
-// Authentication Handlers
-function checkExistingSession() {
-  const token = sessionStorage.getItem('uajm_admin_authenticated');
-  if (token === 'valid_session_token') {
-    state.isAuthenticated = true;
-    showDasborView();
-  } else {
-    showAuthView();
-  }
-}
-
-function setupAuth() {
-  const form = document.getElementById('admin-login-form');
-  const errorBox = document.getElementById('auth-error-alert');
-
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const usernameInput = document.getElementById('admin-username-input').value.trim();
-      const passwordInput = document.getElementById('admin-password-input').value.trim();
-
-      if (usernameInput === TOURNAMENT_INFO.adminAuthUsername && passwordInput === TOURNAMENT_INFO.adminAuthPassword) {
-        state.isAuthenticated = true;
-        sessionStorage.setItem('uajm_admin_authenticated', 'valid_session_token');
-        if (errorBox) errorBox.style.display = 'none';
-        showDasborView();
-        showToast('Login berhasil sebagai Panitia');
-      } else {
-        if (errorBox) {
-          errorBox.textContent = 'Kombinasi nama pengguna dan kata sandi salah.';
-          errorBox.style.display = 'block';
-        }
-      }
-    });
-  }
-
-  const logoutBtn = document.getElementById('admin-logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      sessionStorage.removeItem('uajm_admin_authenticated');
-      state.isAuthenticated = false;
-      showAuthView();
-      showToast('Berhasil keluar dari sesi admin');
-    });
-  }
-}
-
-function showAuthView() {
-  const authPanel = document.getElementById('auth-panel');
-  const dasborPanel = document.getElementById('dasbor-panel');
-  if (authPanel) authPanel.style.display = 'block';
-  if (dasborPanel) dasborPanel.style.display = 'none';
-}
-
-function showDasborView() {
-  const authPanel = document.getElementById('auth-panel');
-  const dasborPanel = document.getElementById('dasbor-panel');
-  if (authPanel) authPanel.style.display = 'none';
-  if (dasborPanel) dasborPanel.style.display = 'block';
-  loadResults();
-}
-
-// Data synchronization with Firebase RTDB
-async function loadResults() {
-  const local = localStorage.getItem('uajm_tournament_results_v1');
-  if (local) {
-    try {
-      state.results = JSON.parse(local);
-    } catch {
-      state.results = {};
-    }
-  }
-
-  try {
-    const response = await fetch(`${TOURNAMENT_INFO.firebaseDatabaseUrl}/results.json`);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && typeof data === 'object') {
-        state.results = data;
-        localStorage.setItem('uajm_tournament_results_v1', JSON.stringify(data));
-      }
-      setFirebaseStatus(true);
-    } else {
-      setFirebaseStatus(false);
-    }
-  } catch {
-    setFirebaseStatus(false);
-  }
-
-  renderAdminMatches();
-}
-
-function setFirebaseStatus(isOnline) {
-  const el = document.getElementById('admin-db-status');
-  if (!el) return;
-  if (isOnline) {
-    el.textContent = 'Terhubung (Online)';
-    el.style.color = 'var(--color-win)';
-  } else {
-    el.textContent = 'Lokal Saja (Offline)';
-    el.style.color = '#ef4444';
-  }
-}
-
-async function saveMatchResult(matchId, winnerTeam, loserTeam, score0, score1) {
-  const payload = {
-    matchId,
-    winner: winnerTeam,
-    loser: loserTeam,
-    score0,
-    score1,
-    updatedAt: new Date().toISOString()
-  };
-
-  state.results[matchId] = payload;
-  localStorage.setItem('uajm_tournament_results_v1', JSON.stringify(state.results));
-  renderAdminMatches();
-
-  try {
-    const res = await fetch(`${TOURNAMENT_INFO.firebaseDatabaseUrl}/results/${matchId}.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      showToast(`Hasil Match ${matchId} disimpan dan disiarkan`);
-    } else {
-      showToast(`Hasil Match ${matchId} disimpan di cache lokal`);
-    }
-  } catch {
-    showToast(`Tersimpan di penyimpanan lokal`);
-  }
-}
-
-async function resetMatchResult(matchId) {
-  delete state.results[matchId];
-  localStorage.setItem('uajm_tournament_results_v1', JSON.stringify(state.results));
-  renderAdminMatches();
-
-  try {
-    await fetch(`${TOURNAMENT_INFO.firebaseDatabaseUrl}/results/${matchId}.json`, {
-      method: 'DELETE'
-    });
-    showToast(`Match ${matchId} berhasil direset`);
-  } catch {
-    showToast(`Match ${matchId} direset secara lokal`);
-  }
-}
-
-// Render Admin Matches Management UI
-function renderAdminMatches() {
-  const container = document.getElementById('admin-matches-list');
-  const counterEl = document.getElementById('admin-matches-counter');
-  if (!container) return;
-
-  const computedMatches = computeAllMatches(BRACKET_MATCHES, state.results);
-  const completedCount = computedMatches.filter(item => item.isCompleted).length;
-  if (counterEl) {
-    counterEl.textContent = `${completedCount} / ${computedMatches.length} Laga Selesai`;
-  }
-
-  let list = computedMatches;
-  if (state.filterRound !== 'all') {
-    list = computedMatches.filter(item => item.round === state.filterRound);
-  }
-
-  let html = '';
-  for (const match of list) {
-    const isCompleted = match.isCompleted;
-    const isWin0 = match.winner === match.resolvedTeam0;
-    const isWin1 = match.winner === match.resolvedTeam1;
-    const hasTbd = match.resolvedTeam0 === 'TBD' || match.resolvedTeam1 === 'TBD' ||
-      match.resolvedTeam0.startsWith('Winner ') || match.resolvedTeam1.startsWith('Winner ') ||
-      match.resolvedTeam0.startsWith('Loser ') || match.resolvedTeam1.startsWith('Loser ');
-
-    html += `
-      <div class="match-admin-item">
-        <div>
-          <div style="font-family: var(--font-mono); font-weight: 700; color: var(--color-primary); font-size: 0.85rem;">
-            ${match.id} &bull; ${match.round}
-          </div>
-          <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 2px;">
-            ${match.time} WIB &bull; ${match.format}
-          </div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg-surface-elevated); border-radius: var(--radius-xs);">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="seed-box">${match.seed0}</span>
-              <span style="font-weight: 600; font-size: 0.82rem; color: ${isWin0 ? 'var(--color-win)' : 'var(--text-main)'};">
-                ${escapeHtml(match.resolvedTeam0)}
-              </span>
-            </div>
-            <button class="btn-win-action ${isWin0 ? 'active-winner' : ''}" data-action="set-winner" data-match="${match.id}" data-team="${escapeHtml(match.resolvedTeam0)}" data-loser="${escapeHtml(match.resolvedTeam1)}" ${hasTbd ? 'disabled' : ''}>
-              ${isWin0 ? 'Pemenang [✓]' : 'Pilih Menang'}
-            </button>
-          </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg-surface-elevated); border-radius: var(--radius-xs);">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="seed-box">${match.seed1}</span>
-              <span style="font-weight: 600; font-size: 0.82rem; color: ${isWin1 ? 'var(--color-win)' : 'var(--text-main)'};">
-                ${escapeHtml(match.resolvedTeam1)}
-              </span>
-            </div>
-            <button class="btn-win-action ${isWin1 ? 'active-winner' : ''}" data-action="set-winner" data-match="${match.id}" data-team="${escapeHtml(match.resolvedTeam1)}" data-loser="${escapeHtml(match.resolvedTeam0)}" ${hasTbd ? 'disabled' : ''}>
-              ${isWin1 ? 'Pemenang [✓]' : 'Pilih Menang'}
-            </button>
-          </div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
-          ${isCompleted ? `
-            <button class="btn-reset-match" data-action="reset-match" data-match="${match.id}">
-              Reset Laga
-            </button>
-          ` : `
-            <span style="font-size: 0.72rem; color: var(--text-dim);">Menunggu</span>
-          `}
-        </div>
-      </div>
-    `;
-  }
-
-  container.innerHTML = html;
-  attachAdminActionListeners();
-}
-
-function attachAdminActionListeners() {
-  const winButtons = document.querySelectorAll('button[data-action="set-winner"]');
-  winButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const matchId = btn.getAttribute('data-match');
-      const winner = btn.getAttribute('data-team');
-      const loser = btn.getAttribute('data-loser');
-      if (matchId && winner && loser) {
-        saveMatchResult(matchId, winner, loser, 1, 0);
-      }
-    });
-  });
-
-  const resetButtons = document.querySelectorAll('button[data-action="reset-match"]');
-  resetButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const matchId = btn.getAttribute('data-match');
-      if (matchId) {
-        resetMatchResult(matchId);
-      }
-    });
-  });
+async function sha256(text) {
+  const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function showToast(message) {
-  const toast = document.getElementById('toast-element');
-  if (!toast) return;
+  const toast = $('#toast');
   toast.textContent = message;
-  toast.classList.add('visible');
-  setTimeout(() => {
-    toast.classList.remove('visible');
-  }, 2800);
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2400);
 }
 
-function escapeHtml(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function setSync(online) {
+  $('#sync').className = `sync ${online ? 'online' : 'offline'}`;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  setupAuth();
-  checkExistingSession();
-
-  const roundFilter = document.getElementById('admin-round-filter');
-  if (roundFilter) {
-    roundFilter.addEventListener('change', (e) => {
-      state.filterRound = e.target.value;
-      renderAdminMatches();
-    });
+/* ---------- Auth ---------- */
+async function handleLogin(event) {
+  event.preventDefault();
+  const username = $('#login-user').value.trim();
+  const password = $('#login-pass').value;
+  const expected = ACCOUNT_HASHES[username];
+  const digest = await sha256(`uajm-esport:${username}:${password}`);
+  if (!expected || digest !== expected) {
+    $('#login-error').textContent = 'Nama pengguna atau kata sandi salah.';
+    $('#login-pass').value = '';
+    return;
   }
+  sessionStorage.setItem(SESSION_KEY, username);
+  $('#login-error').textContent = '';
+  enterPanel(username);
+}
 
-  const refreshBtn = document.getElementById('admin-refresh-btn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      loadResults();
-      showToast('Data berhasil dimuat ulang');
-    });
+function enterPanel(username) {
+  $('#who').textContent = username;
+  $('#login-view').classList.add('hidden');
+  $('#panel-view').classList.remove('hidden');
+  loadData();
+}
+
+function logout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  location.reload();
+}
+
+/* ---------- Data ---------- */
+async function loadData() {
+  try {
+    admin.data = await fetchRemote();
+    writeCache(admin.data);
+    setSync(true);
+  } catch {
+    setSync(false);
+    showToast('Gagal terhubung ke database, memakai data lokal');
   }
-});
+  renderTeams();
+  renderResults();
+}
+
+async function remoteWrite(path, method, body) {
+  const response = await fetch(`${DB_ROOT}/${path}.json`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+}
+
+/* ---------- Team names ---------- */
+function renderTeams() {
+  $('#team-edit').innerHTML = TEAMS_DATA.map(team => `<label>
+    <span class="seed-lg">${team.seed}</span>
+    <input data-team="${team.id}" maxlength="40" value="${escapeHtml(teamName(admin.data, team.id))}" aria-label="Nama tim seed ${team.seed}">
+    <small>${team.entryMatch}${team.hasBye ? ' BYE' : ''}</small>
+  </label>`).join('');
+}
+
+function collectTeamNames() {
+  const names = {};
+  document.querySelectorAll('#team-edit input').forEach(input => {
+    const value = input.value.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
+    if (value) names[input.dataset.team] = value;
+  });
+  return names;
+}
+
+async function saveTeams() {
+  const names = collectTeamNames();
+  admin.data.teams = names;
+  writeCache(admin.data);
+  try {
+    await remoteWrite('teams', 'PUT', names);
+    setSync(true);
+    showToast(`${Object.keys(names).length} nama tim tersimpan`);
+  } catch {
+    setSync(false);
+    showToast('Gagal menyimpan ke database');
+  }
+  renderResults();
+}
+
+function applyBulk() {
+  const lines = $('#bulk-text').value.split(/\r?\n/).map(line => line.trim());
+  document.querySelectorAll('#team-edit input').forEach((input, index) => {
+    if (lines[index] !== undefined) input.value = lines[index].slice(0, 40);
+  });
+  showToast('Diterapkan ke form. Tekan Simpan untuk menerbitkan.');
+}
+
+/* ---------- Results ---------- */
+function renderResults() {
+  const resolved = resolveMatches(admin.data);
+  const all = [...resolved.values()];
+  $('#done-count').textContent = `${all.filter(match => match.done).length} / ${all.length} selesai`;
+  const list = all.filter(match => admin.round === 'all' || match.round === admin.round);
+  $('#result-list').innerHTML = list.map(match => {
+    const ready = match.teams[0] && match.teams[1];
+    const pick = (slot) => {
+      const teamId = match.teams[slot];
+      const meta = teamMeta(teamId);
+      const label = teamId ? (teamName(admin.data, teamId) || `Seed ${meta.seed} (belum diisi)`) : 'Menunggu';
+      return `<button class="pick ${match.winnerSlot === slot ? 'on' : ''}" data-match="${match.id}" data-slot="${slot}" ${ready ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
+    };
+    return `<div class="result-row">
+      <span class="meta">${match.id} Â· ${match.round}<br>${match.time} Â· ${match.format}</span>
+      ${pick(0)}${pick(1)}
+      <button class="btn btn-ghost btn-sm" data-reset="${match.id}" ${match.done ? '' : 'disabled'}>Reset</button>
+    </div>`;
+  }).join('');
+}
+
+async function setWinner(matchId, slot) {
+  const current = admin.data.results[matchId];
+  if (current && current.w === slot) return;
+  const cleared = current ? downstreamMatches(matchId).filter(id => admin.data.results[id]) : [];
+  admin.data.results[matchId] = { w: slot, at: Date.now() };
+  cleared.forEach(id => delete admin.data.results[id]);
+  writeCache(admin.data);
+  renderResults();
+  try {
+    await remoteWrite(`results/${matchId}`, 'PUT', admin.data.results[matchId]);
+    await Promise.all(cleared.map(id => remoteWrite(`results/${id}`, 'DELETE')));
+    setSync(true);
+    showToast(`${matchId} tersimpan`);
+  } catch {
+    setSync(false);
+    showToast('Gagal menyimpan ke database');
+  }
+}
+
+async function resetMatch(matchId) {
+  const affected = [matchId, ...downstreamMatches(matchId)].filter(id => admin.data.results[id]);
+  if (affected.length > 1 && !confirm(`Reset ${matchId} juga akan menghapus hasil: ${affected.slice(1).join(', ')}. Lanjutkan?`)) return;
+  affected.forEach(id => delete admin.data.results[id]);
+  writeCache(admin.data);
+  renderResults();
+  try {
+    await Promise.all(affected.map(id => remoteWrite(`results/${id}`, 'DELETE')));
+    setSync(true);
+    showToast(`${affected.length} hasil direset`);
+  } catch {
+    setSync(false);
+    showToast('Gagal menghapus di database');
+  }
+}
+
+/* ---------- Boot ---------- */
+function boot() {
+  $('#login-form').addEventListener('submit', handleLogin);
+  $('#logout').addEventListener('click', logout);
+  $('#theme-btn').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('uajm_theme', next);
+  });
+  document.querySelectorAll('[data-panel]').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-panel]').forEach(other => other.classList.toggle('active', other === tab));
+    $('#panel-teams').classList.toggle('hidden', tab.dataset.panel !== 'teams');
+    $('#panel-results').classList.toggle('hidden', tab.dataset.panel !== 'results');
+    if (tab.dataset.panel === 'results') renderResults();
+  }));
+  $('#save-teams').addEventListener('click', saveTeams);
+  $('#bulk-toggle').addEventListener('click', () => $('#bulk-box').classList.toggle('hidden'));
+  $('#bulk-apply').addEventListener('click', applyBulk);
+  $('#clear-teams').addEventListener('click', () => {
+    if (!confirm('Kosongkan semua nama tim di form? Perubahan baru terbit setelah Simpan.')) return;
+    document.querySelectorAll('#team-edit input').forEach(input => { input.value = ''; });
+  });
+  $('#round-filter').addEventListener('change', event => { admin.round = event.target.value; renderResults(); });
+  $('#result-list').addEventListener('click', event => {
+    const pick = event.target.closest('[data-slot]');
+    if (pick && !pick.disabled) { setWinner(pick.dataset.match, Number(pick.dataset.slot)); return; }
+    const reset = event.target.closest('[data-reset]');
+    if (reset && !reset.disabled) resetMatch(reset.dataset.reset);
+  });
+
+  const user = sessionStorage.getItem(SESSION_KEY);
+  if (user && ACCOUNT_HASHES[user]) {
+    enterPanel(user);
+    subscribeRemote(data => { admin.data = data; writeCache(data); renderResults(); });
+  }
+}
+
+boot();

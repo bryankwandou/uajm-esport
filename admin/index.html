@@ -1,236 +1,111 @@
-<!DOCTYPE html>
-<html lang="id" data-theme="dark">
+﻿<!DOCTYPE html>
+<html lang="id" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Admin Portal - UKM Esport UAJM 2026</title>
   <meta name="robots" content="noindex, nofollow">
+  <title>Admin - UKM Esport UAJM 2026</title>
+  <script>
+    document.documentElement.dataset.theme = localStorage.getItem('uajm_theme') ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
   <style>
-    .admin-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 24px 18px 80px;
-    }
-    .admin-card {
-      background-color: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 24px;
-      box-shadow: var(--shadow-sm);
-    }
-    .login-box {
-      max-width: 440px;
-      margin: 60px auto;
-    }
-    .form-group {
-      margin-bottom: 16px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .form-control {
-      width: 100%;
-      min-height: 40px;
-      padding: 8px 12px;
-      background-color: var(--bg-surface-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      color: var(--text-main);
-      font-size: 0.88rem;
-      outline: none;
-      transition: border-color 0.15s ease;
-    }
-    .form-control:focus {
-      border-color: var(--color-primary);
-    }
-    .btn-primary-admin {
-      width: 100%;
-      min-height: 42px;
-      background-color: var(--color-primary);
-      color: var(--color-primary-contrast);
-      font-weight: 700;
-      border: none;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      transition: opacity 0.15s ease;
-    }
-    .btn-primary-admin:hover {
-      opacity: 0.9;
-    }
-    .error-alert {
-      padding: 10px 14px;
-      background-color: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.35);
-      border-radius: var(--radius-sm);
-      color: #f87171;
-      font-size: 0.8rem;
-      margin-bottom: 16px;
-      display: none;
-    }
-    .admin-header-strip {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border-subtle);
-      margin-bottom: 20px;
-    }
-    .match-admin-item {
-      background-color: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      display: grid;
-      grid-template-columns: 140px 1fr auto;
-      gap: 14px;
-      align-items: center;
-    }
-    @media (max-width: 768px) {
-      .match-admin-item {
-        grid-template-columns: 1fr;
-      }
-    }
-    .btn-win-action {
-      padding: 5px 12px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      border-radius: var(--radius-xs);
-      border: 1px solid var(--border-subtle);
-      background-color: var(--bg-surface-elevated);
-      color: var(--text-main);
-      cursor: pointer;
-    }
-    .btn-win-action:hover {
-      background-color: var(--color-win-subtle);
-      color: var(--color-win);
-      border-color: var(--color-win);
-    }
-    .btn-win-action.active-winner {
-      background-color: var(--color-win);
-      color: #ffffff;
-      border-color: var(--color-win);
-    }
-    .btn-reset-match {
-      padding: 5px 10px;
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      background: transparent;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-xs);
-      cursor: pointer;
-    }
-    .btn-reset-match:hover {
-      color: #ef4444;
-      border-color: #ef4444;
-    }
+    .login { max-width: 400px; margin: 72px auto; }
+    .field { display: grid; gap: 6px; margin-bottom: 16px; font-size: 14px; font-weight: 600; }
+    .field .input { width: 100%; min-height: 48px; }
+    .error { color: var(--error); font-size: 14px; min-height: 20px; margin-bottom: 8px; }
+    .admin-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .team-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+    .team-edit label { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 6px 8px; }
+    .team-edit .seed-lg { width: 32px; height: 32px; border-radius: 6px; background: var(--surface-alt); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; }
+    .team-edit input { flex: 1; min-width: 0; border: none; background: transparent; min-height: 36px; outline: none; font-size: 14px; }
+    .team-edit small { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+    .result-row { display: grid; grid-template-columns: 120px 1fr 1fr auto; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 10px; }
+    .result-row + .result-row { margin-top: 6px; }
+    .result-row .meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+    .pick { min-height: 44px; border: 1px solid var(--outline); background: var(--surface-alt); border-radius: var(--radius-sm); padding: 0 10px; text-align: left; cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pick:disabled { cursor: not-allowed; opacity: 0.5; }
+    .pick.on { background: var(--win-bg); border-color: var(--win); color: var(--win); font-weight: 700; }
+    textarea.input { width: 100%; min-height: 160px; padding: 12px; font-family: var(--font-mono); font-size: 13px; }
+    @media (max-width: 700px) { .result-row { grid-template-columns: 1fr 1fr; } .result-row .meta { grid-column: 1 / -1; } }
   </style>
 </head>
 <body>
-  <!-- Brand Header -->
   <header class="site-header">
-    <div class="header-container">
-      <div class="brand-group">
-        <div class="brand-badge">
-          <span class="badge-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="6 2 18 2 18 6 6 6 6 2"></polygon>
-              <polygon points="3 6 21 6 18 16 6 16 3 6"></polygon>
-              <line x1="10" y1="16" x2="10" y2="21"></line>
-              <line x1="14" y1="16" x2="14" y2="21"></line>
-              <line x1="7" y1="21" x2="17" y2="21"></line>
-            </svg>
-          </span>
-          <span class="brand-name">UKM ESPORT UAJM</span>
-        </div>
-        <div class="brand-meta">
-          <span class="ukm-tag">PORTAL ADMIN</span>
-        </div>
-      </div>
-      <div class="header-actions">
-        <a href="/" class="action-btn">Ke Halaman Publik</a>
+    <div class="container header-row">
+      <a href="../" class="brand"><span class="brand-mark">U</span><span>UKM ESPORT UAJM<small>Admin</small></span></a>
+      <div class="header-tools">
+        <span class="sync" id="sync"><i></i></span>
+        <button class="icon-btn" id="theme-btn" aria-label="Tema">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        </button>
       </div>
     </div>
   </header>
 
-  <main class="admin-container">
-    <!-- VIEW 1: AUTHENTICATION FORM -->
-    <section id="auth-panel" class="admin-card login-box">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="font-family: var(--font-display); font-size: 1.35rem; font-weight: 800; color: var(--text-main);">Masuk Panel Kontrol</h1>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Akses khusus panitia turnamen UKM Esport UAJM 2026</p>
-      </div>
-
-      <div id="auth-error-alert" class="error-alert"></div>
-
-      <form id="admin-login-form">
-        <div class="form-group">
-          <label for="admin-username-input">Nama Pengguna</label>
-          <input type="text" id="admin-username-input" class="form-control" autocomplete="username" required>
-        </div>
-
-        <div class="form-group">
-          <label for="admin-password-input">Kata Sandi</label>
-          <input type="password" id="admin-password-input" class="form-control" autocomplete="current-password" required>
-        </div>
-
-        <button type="submit" class="btn-primary-admin">Masuk ke Dasbor</button>
+  <main class="container">
+    <section id="login-view" class="card login">
+      <h1 class="view-title" style="font-size:32px">Masuk Admin</h1>
+      <p class="view-sub" style="margin-bottom:24px">Khusus panitia UKM Esport UAJM.</p>
+      <form id="login-form" autocomplete="on">
+        <label class="field">Nama pengguna<input class="input" id="login-user" autocomplete="username" required></label>
+        <label class="field">Kata sandi<input class="input" id="login-pass" type="password" autocomplete="current-password" required></label>
+        <div class="error" id="login-error" role="alert"></div>
+        <button class="btn btn-primary" style="width:100%" type="submit">Masuk</button>
       </form>
     </section>
 
-    <!-- VIEW 2: MANAGEMENT DASBOR -->
-    <section id="dasbor-panel" class="admin-card" style="display: none;">
-      <div class="admin-header-strip">
-        <div>
-          <h1 style="font-family: var(--font-display); font-size: 1.25rem; font-weight: 800; color: var(--text-main);">Dasbor Pengelolaan Skor &amp; Bagan</h1>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-            Sinkronisasi Realtime Firebase: <span id="admin-db-status" style="font-weight: 700; color: var(--color-win);">Terhubung</span>
-          </p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="admin-refresh-btn" class="action-btn">Muat Ulang Data</button>
-          <button id="admin-logout-btn" class="action-btn" style="color: #ef4444; border-color: rgba(239,68,68,0.3);">Keluar</button>
+    <section id="panel-view" class="hidden" style="padding:32px 0 64px">
+      <div class="admin-bar">
+        <div><h1 class="view-title" style="font-size:32px">Panel Admin</h1><p class="view-sub">Masuk sebagai <strong id="who"></strong></p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn btn-ghost btn-sm" href="../" target="_blank" rel="noopener">Lihat situs</a>
+          <button class="btn btn-ghost btn-sm" id="logout">Keluar</button>
         </div>
       </div>
 
-      <!-- Filter Controls -->
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center;">
-        <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">Saring Babak:</label>
-        <select id="admin-round-filter" class="styled-select" style="min-width: 180px;">
-          <option value="all">Semua Babak (58 Laga)</option>
-          <option value="Round 1">Round 1 (26 Laga)</option>
-          <option value="Round of 32">Round of 32 (16 Laga)</option>
-          <option value="Round of 16">Round of 16 (8 Laga)</option>
-          <option value="Quarterfinals">Quarterfinals (4 Laga)</option>
-          <option value="Semifinals">Semifinals (2 Laga)</option>
-          <option value="3rd Place Match">3rd Place Match (1 Laga)</option>
-          <option value="Grand Final">Grand Final (1 Laga)</option>
-        </select>
-
-        <span style="font-size: 0.8rem; color: var(--text-dim); margin-left: auto;" id="admin-matches-counter">
-          0 Selesai
-        </span>
+      <div class="tabs" style="margin-bottom:24px">
+        <button class="tab active" data-panel="teams">Nama Tim</button>
+        <button class="tab" data-panel="results">Hasil Pertandingan</button>
       </div>
 
-      <!-- Matches Management List -->
-      <div id="admin-matches-list" style="display: flex; flex-direction: column; gap: 8px;">
-        <!-- Injected via admin.js -->
+      <div id="panel-teams">
+        <div class="admin-bar">
+          <p class="view-sub">Nama tim default kosong. Isi sesuai seed, lalu simpan.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" id="bulk-toggle">Tempel massal</button>
+            <button class="btn btn-ghost btn-sm" id="clear-teams">Kosongkan semua</button>
+            <button class="btn btn-primary btn-sm" id="save-teams">Simpan nama tim</button>
+          </div>
+        </div>
+        <div id="bulk-box" class="card hidden" style="margin-bottom:16px">
+          <p class="view-sub" style="margin-bottom:8px">Satu nama per baris, urut dari seed 1 sampai 58.</p>
+          <textarea class="input" id="bulk-text"></textarea>
+          <button class="btn btn-ghost btn-sm" id="bulk-apply" style="margin-top:8px">Terapkan ke form</button>
+        </div>
+        <div class="team-edit" id="team-edit"></div>
+      </div>
+
+      <div id="panel-results" class="hidden">
+        <div class="admin-bar">
+          <select class="select" id="round-filter">
+            <option value="all">Semua babak</option>
+            <option>Round 1</option><option>Round of 32</option><option>Round of 16</option>
+            <option>Quarterfinals</option><option>Semifinals</option><option>3rd Place Match</option><option>Grand Final</option>
+          </select>
+          <span class="view-sub" id="done-count"></span>
+        </div>
+        <p class="view-sub" style="margin-bottom:12px">Klik nama tim untuk menetapkan pemenang. Reset akan menghapus hasil laga lanjutan yang bergantung padanya.</p>
+        <div id="result-list"></div>
       </div>
     </section>
   </main>
 
-  <div id="toast-element" class="toast-container"></div>
-
+  <div class="toast" id="toast" role="status"></div>
   <script type="module" src="admin.js"></script>
 </body>
 </html>
