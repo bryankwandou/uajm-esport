@@ -720,3 +720,10 @@ img { max-width: 100%; display: block; }
 
 /* Admin inline-style compatibility */
 .pick { background: var(--surface-sunken); }
+
+@media (max-width: 520px) {
+  .brand > span:last-child { display: none; }
+  .header-tools { gap: 6px; }
+  .lang-select { max-width: 120px; }
+}
+
