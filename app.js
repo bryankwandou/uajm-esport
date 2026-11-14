@@ -108,6 +108,65 @@ function renderLanding() {
   if (statDays) statDays.textContent = ui.cfg.days.length;
   $('#stat-done').textContent = done;
 
+  // Update Hero Spotlight card
+  const pct = matches.length ? Math.round((done / matches.length) * 100) : 0;
+  const progText = $('#hero-progress-text');
+  if (progText) progText.textContent = `${done} / ${matches.length} (${pct}%)`;
+  const progFill = $('#hero-progress-fill');
+  if (progFill) progFill.style.width = `${pct}%`;
+  const spotFormat = $('#spot-format');
+  if (spotFormat) spotFormat.textContent = `Single Elimination (${ui.teamsList.length} Tim)`;
+  const spotDates = $('#spot-dates');
+  if (spotDates) spotDates.textContent = ui.cfg.datesBanner;
+  const sfMatch = matches.find(m => m.round === 'Semifinals');
+  const gfMatch = matches.find(m => m.round === 'Grand Final');
+  const spotFinals = $('#spot-finals');
+  if (spotFinals) {
+    spotFinals.textContent = `Semifinal ${sfMatch?.format || 'BO3'} · Grand Final ${gfMatch?.format || 'BO5'}`;
+  }
+
+  // Render Babak Puncak (Semifinals, 3rd Place, Grand Final) di Landing Page
+  const finalsGrid = $('#home-finals-grid');
+  if (finalsGrid) {
+    const stageMatches = matches.filter(m =>
+      m.round === 'Semifinals' || m.round === '3rd Place Match' || m.round === 'Grand Final'
+    );
+    let semiIdx = 1;
+    finalsGrid.innerHTML = stageMatches.map(m => {
+      const title = m.round === 'Semifinals' ? `Semifinal ${semiIdx++}` : m.round;
+      const isGrand = m.round === 'Grand Final';
+      const renderTeamSlot = (slot) => {
+        const tId = m.teams[slot];
+        const name = displayName(tId) || ui.t.tbd;
+        const seed = seedOf(tId);
+        const win = m.done && m.winnerSlot === slot;
+        return `<div class="stage-team ${win ? 'win' : ''}">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${seed ? `<small style="font-family:var(--font-mono);color:var(--muted);margin-right:6px">#${seed}</small>` : ''}${escapeHtml(name)}</span>
+          <strong>${win ? 'W' : ''}</strong>
+        </div>`;
+      };
+      return `<article class="stage-card ${isGrand ? 'grand' : ''}" data-match="${m.id}">
+        <div>
+          <div class="stage-top">
+            <span>${escapeHtml(m.id)} &middot; ${escapeHtml(m.format)}</span>
+            ${m.stream ? `<span class="pill">${escapeHtml(ui.t.live)}</span>` : ''}
+          </div>
+          <h3 class="stage-title">${escapeHtml(title)}</h3>
+        </div>
+        <div class="stage-teams">
+          ${renderTeamSlot(0)}
+          ${renderTeamSlot(1)}
+        </div>
+        <div class="stage-foot">
+          <span>${escapeHtml(m.date)}</span>
+          <span>${escapeHtml(m.time)} WIB</span>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  /* ---------- Teams ---------- */
+
   const final = matches.find(m => m.round === 'Grand Final') || matches[matches.length - 1];
   const slot = $('#champion-slot');
   if (final && final.done) {
@@ -425,16 +484,22 @@ function renderTeams() {
   const filters = [['all', ui.t.filterAll], ['active', ui.t.filterActive], ['out', ui.t.filterOut]];
   $('#team-tabs').innerHTML = filters.map(([key, label]) => `<button class="tab ${ui.teamFilter === key ? 'active' : ''}" data-filter="${key}">${escapeHtml(label)}</button>`).join('');
   const out = eliminatedTeams(ui.resolved);
+  const query = ($('#team-search')?.value || '').trim().toLowerCase();
   const list = ui.teamsList.filter(team => {
-    if (ui.teamFilter === 'active') return !out.has(team.id);
-    if (ui.teamFilter === 'out') return out.has(team.id);
+    if (ui.teamFilter === 'active' && out.has(team.id)) return false;
+    if (ui.teamFilter === 'out' && !out.has(team.id)) return false;
+    if (query) {
+      const name = displayName(team.id).toLowerCase();
+      const seedStr = `${team.seed} ${team.id.toLowerCase()}`;
+      if (!name.includes(query) && !seedStr.includes(query)) return false;
+    }
     return true;
   });
   $('#team-grid').innerHTML = list.map(team => {
     const name = displayName(team.id);
     return `<div class="team-card ${out.has(team.id) ? 'out' : ''}">
       <span class="seed-lg">${team.seed}</span>
-      <div style="min-width:0"><strong class="${name ? '' : 'empty'}">${escapeHtml(name || ui.t.emptySlot)}</strong>
+      <div style="min-width:0;flex:1"><strong class="${name ? '' : 'empty'}">${escapeHtml(name || ui.t.emptySlot)}</strong>
       <small>${escapeHtml(team.initialRound)} · M${escapeHtml(team.entryMatch.replace('M', ''))} · ${escapeHtml(team.initialDate)} · ${escapeHtml(team.initialTime)}${team.hasBye ? ' · BYE' : ''}</small></div>
     </div>`;
   }).join('');
@@ -601,10 +666,11 @@ function boot() {
     if (filterTab) { ui.teamFilter = filterTab.dataset.filter; renderTeams(); return; }
     const chapterLink = event.target.closest('[data-chapter]');
     if (chapterLink) { event.preventDefault(); document.getElementById(chapterLink.dataset.chapter)?.scrollIntoView({ behavior: 'smooth' }); return; }
-    const item = event.target.closest('.list-item');
-    if (item) openMatch(item.dataset.match);
+    const item = event.target.closest('.list-item, .stage-card');
+    if (item && item.dataset.match) openMatch(item.dataset.match);
   });
 
+  $('#team-search')?.addEventListener('input', renderTeams);
   $('#rules-search').addEventListener('input', renderRules);
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal').addEventListener('click', event => { if (event.target.id === 'modal') closeModal(); });

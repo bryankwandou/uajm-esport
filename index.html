@@ -58,21 +58,45 @@
     <!-- Landing -->
     <section class="view" id="view-home">
       <div class="hero">
-        <div class="container">
-          <div class="kicker" data-i18n="heroKicker"></div>
-          <h1>UAJM Esport<br><em>Championship</em> 2026</h1>
-          <p data-i18n="heroSub"></p>
-          <div class="hero-meta">
-            <span class="hero-badge" id="hero-dates-badge">10 &ndash; 12 NOV 2026</span>
-            <span class="hero-badge" id="hero-slots-badge">SINGLE ELIMINATION &middot; 58 SLOTS</span>
-            <span class="hero-badge">MOBILE LEGENDS: BANG BANG</span>
+        <div class="container hero-grid">
+          <div>
+            <div class="kicker" data-i18n="heroKicker"></div>
+            <h1>UAJM Esport<br><em>Championship</em> 2026</h1>
+            <p data-i18n="heroSub"></p>
+            <div class="hero-meta">
+              <span class="hero-badge" id="hero-dates-badge">10 &ndash; 12 NOV 2026</span>
+              <span class="hero-badge" id="hero-slots-badge">SINGLE ELIMINATION &middot; 58 SLOTS</span>
+              <span class="hero-badge">MOBILE LEGENDS: BANG BANG</span>
+            </div>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#bracket" data-i18n="ctaBracket"></a>
+              <a class="btn btn-ghost" href="#schedule" data-i18n="schedule"></a>
+              <a class="btn btn-ghost" href="#rules" data-i18n="ctaRules"></a>
+              <a class="btn btn-ghost" href="#stream" data-i18n="stream"></a>
+            </div>
           </div>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="#bracket" data-i18n="ctaBracket"></a>
-            <a class="btn btn-ghost" href="#schedule" data-i18n="schedule"></a>
-            <a class="btn btn-ghost" href="#rules" data-i18n="ctaRules"></a>
-            <a class="btn btn-ghost" href="#stream" data-i18n="stream"></a>
-          </div>
+
+          <aside class="hero-spotlight" aria-label="Tournament Status">
+            <div class="spotlight-head">
+              <span>RINGKASAN KOMPETISI</span>
+              <span class="pill" data-i18n="live">LIVE</span>
+            </div>
+            <div class="progress-wrap">
+              <div class="progress-label">
+                <span data-i18n="statDone">Selesai</span>
+                <strong id="hero-progress-text">0 / 58 (0%)</strong>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="hero-progress-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <ul class="spotlight-list">
+              <li><span>Sistem Bagan</span><strong id="spot-format">Single Elimination (58 Tim)</strong></li>
+              <li><span>Tanggal Pelaksanaan</span><strong id="spot-dates">10 &ndash; 12 Nov 2026</strong></li>
+              <li><span>Babak Puncak</span><strong id="spot-finals">Semifinal BO3 &middot; Grand Final BO5</strong></li>
+              <li><span>Mode Pertandingan</span><strong>Custom Draft Pick 5v5 (WIB)</strong></li>
+            </ul>
+          </aside>
         </div>
       </div>
       <div class="container">
@@ -84,8 +108,13 @@
         </div>
         <div class="section hidden" id="champion-slot"></div>
         <div class="section" style="padding-bottom:0">
-          <h2 data-i18n="formatTitle"></h2>
-          <p class="view-sub" style="margin-bottom:24px" data-i18n="formatText"></p>
+          <div class="section-head">
+            <div>
+              <h2 data-i18n="formatTitle"></h2>
+              <p class="view-sub" data-i18n="formatText"></p>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#schedule" data-i18n="schedule"></a>
+          </div>
           <div class="timeline" id="home-timeline">
             <div class="card">
               <div class="day-num">DAY 1 &middot; 10 NOV 2026</div>
@@ -117,11 +146,61 @@
             </div>
           </div>
         </div>
+
         <div class="section" style="padding-bottom:0">
-          <h2 data-i18n="liveChannels"></h2>
-          <p class="view-sub" style="margin-bottom:16px" data-i18n="streamChannelsSub"></p>
+          <div class="section-head">
+            <div>
+              <h2>Babak Puncak &mdash; Semifinal &amp; Final</h2>
+              <p class="view-sub">Pantau status terkini laga penentuan juara. Klik kartu pertandingan untuk melihat rincian.</p>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#bracket" data-i18n="ctaBracket"></a>
+          </div>
+          <div class="finals-grid" id="home-finals-grid"></div>
+        </div>
+
+        <div class="section" style="padding-bottom:0">
+          <div class="section-head">
+            <div>
+              <h2 data-i18n="liveChannels"></h2>
+              <p class="view-sub" data-i18n="streamChannelsSub"></p>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#stream" data-i18n="stream"></a>
+          </div>
           <div class="channels-grid" id="home-channels-grid"></div>
         </div>
+
+        <div class="section" style="padding-bottom:0">
+          <div class="section-head">
+            <div>
+              <h2 data-i18n="rules"></h2>
+              <p class="view-sub">Ringkasan ketentuan utama yang wajib dipatuhi seluruh tim peserta.</p>
+            </div>
+            <a class="btn btn-ghost btn-sm" href="#rules" data-i18n="ctaRules"></a>
+          </div>
+          <div class="rules-grid">
+            <div class="rule-mini">
+              <span class="num">PASAL 01 &middot; KEHADIRAN</span>
+              <h3>Toleransi Walkover 15 Menit</h3>
+              <p>Seluruh tim wajib siap di lobby 15 menit sebelum jadwal. Keterlambatan lebih dari 15 menit dinyatakan diskualifikasi (WO).</p>
+            </div>
+            <div class="rule-mini">
+              <span class="num">PASAL 02 &middot; MODE GAME</span>
+              <h3>Custom Draft Pick 5v5</h3>
+              <p>Pertandingan menggunakan mode Custom Lobby Draft Pick resmi dengan seluruh emblem dan skin diperbolehkan.</p>
+            </div>
+            <div class="rule-mini">
+              <span class="num">PASAL 03 &middot; TEKNIS &amp; PAUSE</span>
+              <h3>Pause Maksimal 1x3 Menit</h3>
+              <p>Pada laga yang disiarkan, tiap tim berhak meminta pause maksimal 1 kali (3 menit) melalui chat All kepada wasit.</p>
+            </div>
+            <div class="rule-mini">
+              <span class="num">PASAL 04 &middot; VERIFIKASI</span>
+              <h3>Bukti Screenshot Kemenangan</h3>
+              <p>Kapten tim pemenang wajib mengunggah screenshot layar hasil akhir pertandingan kepada panitia maksimal 5 menit setelah laga usai.</p>
+            </div>
+          </div>
+        </div>
+
         <div class="section">
           <div class="quick-grid">
             <a class="card quick-card" href="#bracket"><h3 data-i18n="bracket"></h3><span aria-hidden="true">&rarr;</span></a>
@@ -147,13 +226,19 @@
             <button class="btn btn-ghost btn-sm" id="zoom-reset" type="button" data-i18n="reset"></button>
           </div>
         </div>
-        <div class="round-jumps" id="round-jumps">
-          <button type="button" class="round-jump" data-jump-col="0">Round 1</button>
-          <button type="button" class="round-jump" data-jump-col="1">Round of 32</button>
-          <button type="button" class="round-jump" data-jump-col="2">Round of 16</button>
-          <button type="button" class="round-jump" data-jump-col="3">Quarterfinals</button>
-          <button type="button" class="round-jump" data-jump-col="4">Semifinals</button>
-          <button type="button" class="round-jump" data-jump-col="5">Finals</button>
+        <div class="bracket-bar">
+          <div class="round-jumps" id="round-jumps">
+            <button type="button" class="round-jump" data-jump-col="0">Round 1</button>
+            <button type="button" class="round-jump" data-jump-col="1">Round of 32</button>
+            <button type="button" class="round-jump" data-jump-col="2">Round of 16</button>
+            <button type="button" class="round-jump" data-jump-col="3">Quarterfinals</button>
+            <button type="button" class="round-jump" data-jump-col="4">Semifinals</button>
+            <button type="button" class="round-jump" data-jump-col="5">Finals</button>
+          </div>
+          <div class="bracket-legend">
+            <span class="legend-item"><i class="legend-dot"></i> Live Stream</span>
+            <span class="legend-item"><strong style="color:var(--win);font-family:var(--font-mono)">W</strong> <span data-i18n="winner">Pemenang</span></span>
+          </div>
         </div>
         <div class="bracket-shell" id="bracket-shell"><div class="bracket-stage" id="bracket-stage"></div></div>
       </div>
@@ -175,7 +260,10 @@
       <div class="container">
         <div class="view-head">
           <div><h2 class="view-title" data-i18n="teams"></h2><p class="view-sub" id="teams-sub">58</p></div>
-          <div class="tabs" id="team-tabs"></div>
+          <div class="toolbar">
+            <input class="input" id="team-search" type="search" data-i18n-placeholder="search" autocomplete="off">
+            <div class="tabs" id="team-tabs"></div>
+          </div>
         </div>
         <div class="team-grid" id="team-grid"></div>
       </div>
