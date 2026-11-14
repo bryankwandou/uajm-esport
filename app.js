@@ -1,10 +1,9 @@
-import { BRACKET_MATCHES } from './bracket-data.js';
-import { TEAMS_DATA } from './teams-data.js';
 import { TOURNAMENT_RULES } from './rules-data.js';
 import { LANGUAGES, RTL_LANGUAGES, getDictionary } from './i18n.js';
 import {
   readCache, writeCache, fetchRemote, subscribeRemote,
-  resolveMatches, eliminatedTeams, teamName, teamMeta, escapeHtml
+  resolveMatches, getActiveTeams, normalizeConfig, eliminatedTeams,
+  teamName, teamMeta, escapeHtml
 } from './core.js';
 
 const ROUTES = ['home', 'bracket', 'schedule', 'teams', 'rules', 'stream'];
@@ -17,6 +16,8 @@ const SLOT_HEIGHT = 128;
 const ui = {
   data: readCache(),
   resolved: null,
+  teamsList: [],
+  cfg: null,
   lang: localStorage.getItem('uajm_lang') || detectLanguage(),
   t: null,
   day: 1,
@@ -71,12 +72,17 @@ function displayName(teamId) {
 }
 
 function seedOf(teamId) {
-  const meta = teamMeta(teamId);
+  const meta = teamMeta(teamId, ui.data);
   return meta ? meta.seed : '';
 }
 
 function renderAll() {
+  ui.cfg = normalizeConfig(ui.data.config);
   ui.resolved = resolveMatches(ui.data);
+  ui.teamsList = getActiveTeams(ui.data);
+  if (!ui.cfg.days.some(d => d.day === ui.day)) {
+    ui.day = ui.cfg.days[0]?.day || 1;
+  }
   renderLanding();
   renderBracket();
   renderSchedule();
@@ -87,9 +93,22 @@ function renderAll() {
 
 /* ---------- Landing ---------- */
 function renderLanding() {
-  const done = [...ui.resolved.values()].filter(match => match.done).length;
+  const matches = [...ui.resolved.values()];
+  const done = matches.filter(match => match.done).length;
+  const datesBadge = $('#hero-dates-badge');
+  if (datesBadge) datesBadge.textContent = ui.cfg.datesBanner.toUpperCase();
+  const slotsBadge = $('#hero-slots-badge');
+  if (slotsBadge) slotsBadge.textContent = `SINGLE ELIMINATION · ${ui.teamsList.length} SLOTS`;
+
+  const statTeams = $('#stat-teams');
+  if (statTeams) statTeams.textContent = ui.teamsList.length;
+  const statMatches = $('#stat-matches');
+  if (statMatches) statMatches.textContent = matches.length;
+  const statDays = $('#stat-days');
+  if (statDays) statDays.textContent = ui.cfg.days.length;
   $('#stat-done').textContent = done;
-  const final = ui.resolved.get('M58');
+
+  const final = matches.find(m => m.round === 'Grand Final') || matches[matches.length - 1];
   const slot = $('#champion-slot');
   if (final && final.done) {
     const champion = displayName(final.teams[final.winnerSlot]);
@@ -99,31 +118,116 @@ function renderLanding() {
     slot.innerHTML = '';
     slot.classList.add('hidden');
   }
+
+  // Render kartu jadwal 3 hari secara dinamis sesuai konfigurasi tanggal & jadwal admin
+  const timeline = $('#home-timeline');
+  if (timeline) {
+    timeline.innerHTML = ui.cfg.days.map(dayObj => {
+      const dayMatches = matches.filter(m => Number(m.day) === Number(dayObj.day));
+      const roundGroups = new Map();
+      for (const m of dayMatches) {
+        if (!roundGroups.has(m.round)) roundGroups.set(m.round, []);
+        roundGroups.get(m.round).push(m);
+      }
+
+      const itemsHtml = [];
+      for (const [roundName, rMatches] of roundGroups.entries()) {
+        if (roundName === 'Semifinals' && rMatches.length === 2) {
+          rMatches.forEach((sm, idx) => {
+            itemsHtml.push(`<li><span>Semifinal ${idx + 1} (${escapeHtml(sm.id)})</span><span>${escapeHtml(sm.time)} WIB &middot; ${escapeHtml(sm.format)}</span></li>`);
+          });
+        } else if (roundName === '3rd Place Match' || roundName === 'Grand Final') {
+          const m = rMatches[0];
+          itemsHtml.push(`<li><span>${escapeHtml(roundName)} (${escapeHtml(m.id)})</span><span>${escapeHtml(m.time)} WIB &middot; ${escapeHtml(m.format)}</span></li>`);
+        } else {
+          const times = [...new Set(rMatches.map(m => m.time))];
+          const kloters = [...new Set(rMatches.map(m => m.kloter).filter(Boolean))];
+          const timeText = times.length > 1 ? `${times[0]} – ${times[times.length - 1]} WIB` : `${times[0] || ''} WIB`;
+          const kloterLabel = kloters.length > 1 ? ` (Kloter ${kloters.join(' & ')})` : '';
+          const fmt = rMatches[0]?.format || 'BO1';
+          itemsHtml.push(`<li><span>${escapeHtml(roundName)}${escapeHtml(kloterLabel)}</span><span>${escapeHtml(timeText)} &middot; ${escapeHtml(fmt)}</span></li>`);
+        }
+      }
+      if (dayMatches.some(m => m.stream)) {
+        itemsHtml.push(`<li><span>Status</span><span>Live Broadcast</span></li>`);
+      }
+
+      return `<div class="card">
+        <div class="day-num">${escapeHtml(ui.t.day.toUpperCase())} ${dayObj.day} &middot; ${escapeHtml(dayObj.date.toUpperCase())}</div>
+        <h3>${escapeHtml(dayObj.title)}</h3>
+        <ul>${itemsHtml.join('')}</ul>
+      </div>`;
+    }).join('');
+  }
 }
 
-/* ---------- Bracket (Challonge style) ---------- */
-function computeLayout() {
+/* ---------- Bracket (Challonge style, Dynamic Structure) ---------- */
+function computeLayout(matches) {
   const positions = new Map();
-  const roundOf32 = BRACKET_MATCHES.filter(match => match.round === 'Round of 32');
-  roundOf32.forEach((match, index) => {
-    positions.set(match.id, { col: 1, cy: TOP_OFFSET + index * SLOT_HEIGHT + SLOT_HEIGHT / 2 });
-  });
-  BRACKET_MATCHES.filter(match => match.round === 'Round 1').forEach(match => {
-    const target = positions.get(match.next.m);
-    const offset = (CARD_HEIGHT + 12) / 2;
-    positions.set(match.id, { col: 0, cy: target.cy + (match.next.slot === 0 ? -offset : offset) });
-  });
-  const columnFor = { 'Round of 16': 2, Quarterfinals: 3, Semifinals: 4, 'Grand Final': 5 };
-  BRACKET_MATCHES.filter(match => columnFor[match.round] !== undefined).forEach(match => {
-    const feeders = [match.s0, match.s1].map(item => positions.get(item.w));
-    positions.set(match.id, { col: columnFor[match.round], cy: (feeders[0].cy + feeders[1].cy) / 2 });
-  });
-  const grandFinal = positions.get('M58');
-  positions.set('M57', { col: 5, cy: grandFinal.cy + 150 });
-  return positions;
-}
+  const mainRounds = [];
+  for (const m of matches) {
+    if (m.round !== '3rd Place Match' && !mainRounds.includes(m.round)) {
+      mainRounds.push(m.round);
+    }
+  }
+  const byRound = (rName) => matches.filter(m => m.round === rName);
+  const r0 = mainRounds[0] ? byRound(mainRounds[0]) : [];
+  const r1 = mainRounds[1] ? byRound(mainRounds[1]) : [];
+  const hasPartialPrelim = mainRounds.length >= 2 && r0.length < 2 * r1.length;
 
-const LAYOUT = computeLayout();
+  let baseRows = 16;
+  let slotHeight = SLOT_HEIGHT;
+
+  if (hasPartialPrelim) {
+    baseRows = Math.max(r1.length, 4);
+    r1.forEach((match, index) => {
+      positions.set(match.id, { col: 1, cy: TOP_OFFSET + index * slotHeight + slotHeight / 2 });
+    });
+    r0.forEach((match, index) => {
+      const target = match.next ? positions.get(match.next.m) : null;
+      const offset = (CARD_HEIGHT + 12) / 2;
+      const cy = target ? (target.cy + (match.next.slot === 0 ? -offset : offset)) : (TOP_OFFSET + index * slotHeight + slotHeight / 2);
+      positions.set(match.id, { col: 0, cy });
+    });
+    for (let col = 2; col < mainRounds.length; col++) {
+      const roundMatches = byRound(mainRounds[col]);
+      roundMatches.forEach((match, idx) => {
+        const f0 = match.s0 && (match.s0.w || match.s0.l) ? positions.get(match.s0.w || match.s0.l) : null;
+        const f1 = match.s1 && (match.s1.w || match.s1.l) ? positions.get(match.s1.w || match.s1.l) : null;
+        const fallback = TOP_OFFSET + idx * slotHeight * Math.pow(2, col - 1) + slotHeight / 2;
+        const cy = (f0 && f1) ? (f0.cy + f1.cy) / 2 : (f0 ? f0.cy : (f1 ? f1.cy : fallback));
+        positions.set(match.id, { col, cy });
+      });
+    }
+  } else {
+    baseRows = Math.max(r0.length, 2);
+    if (baseRows > 16) slotHeight = 88;
+    r0.forEach((match, index) => {
+      positions.set(match.id, { col: 0, cy: TOP_OFFSET + index * slotHeight + slotHeight / 2 });
+    });
+    for (let col = 1; col < mainRounds.length; col++) {
+      const roundMatches = byRound(mainRounds[col]);
+      roundMatches.forEach((match, idx) => {
+        const f0 = match.s0 && (match.s0.w || match.s0.l) ? positions.get(match.s0.w || match.s0.l) : null;
+        const f1 = match.s1 && (match.s1.w || match.s1.l) ? positions.get(match.s1.w || match.s1.l) : null;
+        const fallback = TOP_OFFSET + idx * slotHeight * Math.pow(2, col) + slotHeight / 2;
+        const cy = (f0 && f1) ? (f0.cy + f1.cy) / 2 : (f0 ? f0.cy : (f1 ? f1.cy : fallback));
+        positions.set(match.id, { col, cy });
+      });
+    }
+  }
+
+  const gfMatch = matches.find(m => m.round === 'Grand Final');
+  const thirdMatch = matches.find(m => m.round === '3rd Place Match');
+  if (thirdMatch) {
+    const gfPos = gfMatch ? positions.get(gfMatch.id) : { col: Math.max(0, mainRounds.length - 1), cy: 300 };
+    positions.set(thirdMatch.id, { col: gfPos.col, cy: gfPos.cy + 150 });
+  }
+
+  const labels = mainRounds.map(r => (r === 'Grand Final' ? 'Finals' : r));
+  const totalHeight = Math.max(TOP_OFFSET + baseRows * slotHeight + 60, 520);
+  return { positions, labels, totalHeight };
+}
 
 function rowHtml(match, slot) {
   const teamId = match.teams[slot];
@@ -139,32 +243,44 @@ function rowHtml(match, slot) {
 
 function renderBracket() {
   const stage = $('#bracket-stage');
-  const width = COLUMN_STEP * 6 + 40;
-  const height = TOP_OFFSET + SLOT_HEIGHT * 16 + 40;
-  const labels = ['Round 1', 'Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals', 'Finals'];
-  let cards = labels.map((label, col) => `<div class="round-label" style="left:${col * COLUMN_STEP + 42}px">${label}</div>`).join('');
+  const matches = [...ui.resolved.values()];
+  const { positions, labels, totalHeight } = computeLayout(matches);
+  const width = COLUMN_STEP * Math.max(labels.length, 1) + 40;
+  const height = totalHeight;
+
+  const bracketSub = $('#bracket-sub');
+  if (bracketSub) bracketSub.textContent = `Single Elimination · ${ui.teamsList.length} (${ui.cfg.datesBanner})`;
+
+  const jumps = $('#round-jumps');
+  if (jumps) {
+    jumps.innerHTML = labels.map((label, col) => `<button type="button" class="round-jump" data-jump-col="${col}">${escapeHtml(label)}</button>`).join('');
+  }
+
+  let cards = labels.map((label, col) => `<div class="round-label" style="left:${col * COLUMN_STEP + 42}px">${escapeHtml(label)}</div>`).join('');
   const paths = [];
   ui.connectors = [];
 
-  for (const match of ui.resolved.values()) {
-    const position = LAYOUT.get(match.id);
+  for (const match of matches) {
+    const position = positions.get(match.id);
+    if (!position) continue;
     const left = position.col * COLUMN_STEP + 16;
     const top = position.cy - CARD_HEIGHT / 2;
     const number = match.id.replace('M', '');
-    if (match.id === 'M58' || match.id === 'M57') {
-      const tagText = match.id === 'M58' ? 'Grand Final (BO5)' : '3rd Place Match (BO3)';
-      cards += `<div class="match-tag" style="left:${left + 26}px;top:${top - 18}px">${tagText}</div>`;
+    if (match.round === 'Grand Final' || match.round === '3rd Place Match') {
+      const tagText = `${match.round} (${match.format})`;
+      cards += `<div class="match-tag" style="left:${left + 26}px;top:${top - 18}px">${escapeHtml(tagText)}</div>`;
     }
     cards += `<div class="match ${match.stream ? 'stream' : ''}" data-match="${match.id}" style="left:${left}px;top:${top}px">
       <span class="match-no">${number}</span>
       <div class="match-box">${rowHtml(match, 0)}${rowHtml(match, 1)}</div>
     </div>`;
 
-    if (match.id === 'M57') continue;
+    if (match.round === '3rd Place Match') continue;
     [match.s0, match.s1].forEach((definition, slot) => {
-      if (!definition.w) return;
+      if (!definition || !definition.w) return;
       const feeder = ui.resolved.get(definition.w);
-      const from = LAYOUT.get(definition.w);
+      const from = positions.get(definition.w);
+      if (!feeder || !from) return;
       const x1 = from.col * COLUMN_STEP + 16 + CARD_WIDTH;
       const x2 = left + 26;
       const y2 = top + (slot === 0 ? 13 : 39);
@@ -193,7 +309,7 @@ function applyBracketSearch() {
   document.querySelectorAll('#bracket-stage .match').forEach(card => {
     if (!query) { card.classList.remove('dim'); return; }
     const match = ui.resolved.get(card.dataset.match);
-    const hit = match.teams.some(teamId => displayName(teamId).toLowerCase().includes(query));
+    const hit = match && match.teams.some(teamId => displayName(teamId).toLowerCase().includes(query));
     card.classList.toggle('dim', !hit);
   });
 }
@@ -222,12 +338,15 @@ function setupBracketInteractions() {
   $('#zoom-reset').addEventListener('click', () => { setZoom(window.innerWidth < 640 ? 0.75 : 1); shell.scrollTo({ left: 0, top: 0 }); });
   $('#bracket-search').addEventListener('input', applyBracketSearch);
 
-  document.querySelectorAll('[data-jump-col]').forEach(btn => {
-    btn.addEventListener('click', () => {
+  const jumps = $('#round-jumps');
+  if (jumps) {
+    jumps.addEventListener('click', event => {
+      const btn = event.target.closest('[data-jump-col]');
+      if (!btn) return;
       const col = Number(btn.dataset.jumpCol) || 0;
       shell.scrollTo({ left: col * COLUMN_STEP * ui.zoom, behavior: 'smooth' });
     });
-  });
+  }
 
   let drag = null;
   shell.addEventListener('pointerdown', event => {
@@ -263,7 +382,7 @@ function openMatch(matchId) {
     return `<div class="modal-team ${win ? 'win' : ''}"><span class="seed-lg" style="width:28px;text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--muted)">${seedOf(teamId)}</span><strong>${escapeHtml(name)}</strong>${win ? `<span class="pill">${escapeHtml(ui.t.winner)}</span>` : ''}</div>`;
   };
   const next = match.next ? `<span>${escapeHtml(ui.t.nextMatch)}: Match ${match.next.m.replace('M', '')}</span>` : '';
-  $('#modal-body').innerHTML = `${team(0)}${team(1)}<div class="modal-info"><span>${match.time} WIB${match.kloter ? ` · Kloter ${match.kloter}` : ''}</span>${next}${match.stream ? `<span>${escapeHtml(ui.t.live)}</span>` : ''}</div>`;
+  $('#modal-body').innerHTML = `${team(0)}${team(1)}<div class="modal-info"><span>${escapeHtml(match.date)} · ${escapeHtml(match.time)} WIB${match.kloter ? ` · Kloter ${match.kloter}` : ''}</span>${next}${match.stream ? `<span>${escapeHtml(ui.t.live)}</span>` : ''}</div>`;
   $('#modal').classList.add('open');
 }
 
@@ -277,31 +396,36 @@ function listItemHtml(match) {
     return `<div class="list-team ${win ? 'win' : ''} ${name ? '' : 'empty'}"><span>${escapeHtml(name || ui.t.tbd)}</span><span>${win ? 'W' : ''}</span></div>`;
   };
   return `<div class="list-item" data-match="${match.id}">
-    <div class="list-meta"><span>M${match.id.replace('M', '')} · ${match.time}${match.kloter ? ` · K${match.kloter}` : ''}</span><span>${match.stream ? `<span class="pill">${escapeHtml(ui.t.live)}</span>` : match.format}</span></div>
+    <div class="list-meta"><span>M${match.id.replace('M', '')} · ${escapeHtml(match.date)} · ${escapeHtml(match.time)}${match.kloter ? ` · K${match.kloter}` : ''}</span><span>${match.stream ? `<span class="pill">${escapeHtml(ui.t.live)}</span>` : escapeHtml(match.format)}</span></div>
     ${team(0)}${team(1)}
   </div>`;
 }
 
 function renderSchedule() {
-  $('#day-tabs').innerHTML = [1, 2, 3].map(day => `<button class="tab ${ui.day === day ? 'active' : ''}" data-day="${day}">${escapeHtml(ui.t.day)} ${day}</button>`).join('');
+  const scheduleSub = $('#schedule-sub');
+  if (scheduleSub) scheduleSub.textContent = `${ui.cfg.datesBanner} · WIB`;
+
+  $('#day-tabs').innerHTML = ui.cfg.days.map(d => `<button class="tab ${ui.day === d.day ? 'active' : ''}" data-day="${d.day}">${escapeHtml(ui.t.day)} ${d.day} · ${escapeHtml(d.date)}</button>`).join('');
   const groups = new Map();
-  [...ui.resolved.values()].filter(match => match.day === ui.day).forEach(match => {
-    const key = `${match.round}|${match.time}`;
+  [...ui.resolved.values()].filter(match => Number(match.day) === Number(ui.day)).forEach(match => {
+    const key = `${match.round}|${match.date}|${match.time}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(match);
   });
   $('#schedule-list').innerHTML = [...groups.entries()].map(([key, matches]) => {
-    const [round, time] = key.split('|');
-    return `<div class="round-block"><h3>${round}<span>${time} WIB · ${matches[0].format}</span></h3><div class="list">${matches.map(listItemHtml).join('')}</div></div>`;
+    const [round, date, time] = key.split('|');
+    return `<div class="round-block"><h3>${escapeHtml(round)}<span>${escapeHtml(date)} · ${escapeHtml(time)} WIB · ${escapeHtml(matches[0].format)}</span></h3><div class="list">${matches.map(listItemHtml).join('')}</div></div>`;
   }).join('');
 }
 
 /* ---------- Teams ---------- */
 function renderTeams() {
+  const teamsSub = $('#teams-sub');
+  if (teamsSub) teamsSub.textContent = `${ui.teamsList.length}`;
   const filters = [['all', ui.t.filterAll], ['active', ui.t.filterActive], ['out', ui.t.filterOut]];
   $('#team-tabs').innerHTML = filters.map(([key, label]) => `<button class="tab ${ui.teamFilter === key ? 'active' : ''}" data-filter="${key}">${escapeHtml(label)}</button>`).join('');
   const out = eliminatedTeams(ui.resolved);
-  const list = TEAMS_DATA.filter(team => {
+  const list = ui.teamsList.filter(team => {
     if (ui.teamFilter === 'active') return !out.has(team.id);
     if (ui.teamFilter === 'out') return out.has(team.id);
     return true;
@@ -311,7 +435,7 @@ function renderTeams() {
     return `<div class="team-card ${out.has(team.id) ? 'out' : ''}">
       <span class="seed-lg">${team.seed}</span>
       <div style="min-width:0"><strong class="${name ? '' : 'empty'}">${escapeHtml(name || ui.t.emptySlot)}</strong>
-      <small>${team.initialRound} · M${team.entryMatch.replace('M', '')} · ${team.initialTime}${team.hasBye ? ' · BYE' : ''}</small></div>
+      <small>${escapeHtml(team.initialRound)} · M${escapeHtml(team.entryMatch.replace('M', ''))} · ${escapeHtml(team.initialDate)} · ${escapeHtml(team.initialTime)}${team.hasBye ? ' · BYE' : ''}</small></div>
     </div>`;
   }).join('');
 }

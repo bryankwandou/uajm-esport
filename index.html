@@ -63,8 +63,8 @@
           <h1>UAJM Esport<br><em>Championship</em> 2026</h1>
           <p data-i18n="heroSub"></p>
           <div class="hero-meta">
-            <span class="hero-badge">10 &ndash; 12 NOV 2026</span>
-            <span class="hero-badge">SINGLE ELIMINATION &middot; 58 SLOTS</span>
+            <span class="hero-badge" id="hero-dates-badge">10 &ndash; 12 NOV 2026</span>
+            <span class="hero-badge" id="hero-slots-badge">SINGLE ELIMINATION &middot; 58 SLOTS</span>
             <span class="hero-badge">MOBILE LEGENDS: BANG BANG</span>
           </div>
           <div class="hero-actions">
@@ -77,16 +77,16 @@
       </div>
       <div class="container">
         <div class="stats">
-          <div class="stat"><strong>58</strong><span data-i18n="statTeams"></span></div>
-          <div class="stat"><strong>58</strong><span data-i18n="statMatches"></span></div>
-          <div class="stat"><strong>3</strong><span data-i18n="statDays"></span></div>
+          <div class="stat"><strong id="stat-teams">58</strong><span data-i18n="statTeams"></span></div>
+          <div class="stat"><strong id="stat-matches">58</strong><span data-i18n="statMatches"></span></div>
+          <div class="stat"><strong id="stat-days">3</strong><span data-i18n="statDays"></span></div>
           <div class="stat"><strong id="stat-done">0</strong><span data-i18n="statDone"></span></div>
         </div>
         <div class="section hidden" id="champion-slot"></div>
         <div class="section" style="padding-bottom:0">
           <h2 data-i18n="formatTitle"></h2>
           <p class="view-sub" style="margin-bottom:24px" data-i18n="formatText"></p>
-          <div class="timeline">
+          <div class="timeline" id="home-timeline">
             <div class="card">
               <div class="day-num">DAY 1 &middot; 10 NOV 2026</div>
               <h3>Round 1 &rarr; Quarterfinals</h3>
@@ -138,7 +138,7 @@
     <section class="view" id="view-bracket">
       <div class="container">
         <div class="view-head">
-          <div><h2 class="view-title" data-i18n="bracket"></h2><p class="view-sub">Single Elimination &middot; 58</p></div>
+          <div><h2 class="view-title" data-i18n="bracket"></h2><p class="view-sub" id="bracket-sub">Single Elimination &middot; 58</p></div>
           <div class="toolbar">
             <input class="input" id="bracket-search" type="search" data-i18n-placeholder="search" autocomplete="off">
             <button class="icon-btn" id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
@@ -163,7 +163,7 @@
     <section class="view" id="view-schedule">
       <div class="container">
         <div class="view-head">
-          <div><h2 class="view-title" data-i18n="schedule"></h2><p class="view-sub">10 &ndash; 12 Nov 2026 &middot; WIB</p></div>
+          <div><h2 class="view-title" data-i18n="schedule"></h2><p class="view-sub" id="schedule-sub">10 &ndash; 12 Nov 2026 &middot; WIB</p></div>
           <div class="tabs" id="day-tabs"></div>
         </div>
         <div id="schedule-list"></div>
@@ -174,7 +174,7 @@
     <section class="view" id="view-teams">
       <div class="container">
         <div class="view-head">
-          <div><h2 class="view-title" data-i18n="teams"></h2><p class="view-sub">58</p></div>
+          <div><h2 class="view-title" data-i18n="teams"></h2><p class="view-sub" id="teams-sub">58</p></div>
           <div class="tabs" id="team-tabs"></div>
         </div>
         <div class="team-grid" id="team-grid"></div>

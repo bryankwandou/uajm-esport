@@ -6,8 +6,16 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Admin - UKM Esport UAJM 2026</title>
   <script>
-    document.documentElement.dataset.theme = localStorage.getItem('uajm_theme') ||
-      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    (function () {
+      var p = new URLSearchParams(location.search).get('theme');
+      if (p === 'light' || p === 'dark') {
+        localStorage.setItem('uajm_theme', p);
+        document.documentElement.dataset.theme = p;
+      } else {
+        document.documentElement.dataset.theme = localStorage.getItem('uajm_theme') ||
+          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      }
+    })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,34 +24,60 @@
   <style>
     .login { max-width: 400px; margin: 72px auto; }
     .field { display: grid; gap: 6px; margin-bottom: 16px; font-size: 14px; font-weight: 600; }
-    .field .input { width: 100%; min-height: 48px; }
+    .field .input, .field .select { width: 100%; min-height: 44px; }
     .error { color: var(--error); font-size: 14px; min-height: 20px; margin-bottom: 8px; }
-    .admin-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .admin-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
     .team-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
     .team-edit label { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 6px 8px; }
     .team-edit .seed-lg { width: 32px; height: 32px; border-radius: 6px; background: var(--surface-alt); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; }
     .team-edit input { flex: 1; min-width: 0; border: none; background: transparent; min-height: 36px; outline: none; font-size: 14px; }
     .team-edit small { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
-    .result-row { display: grid; grid-template-columns: 120px 1fr 1fr auto; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 10px; }
+    .result-row { display: grid; grid-template-columns: 140px 1fr 1fr auto; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 10px; }
     .result-row + .result-row { margin-top: 6px; }
     .result-row .meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
     .pick { min-height: 44px; border: 1px solid var(--outline); background: var(--surface-alt); border-radius: var(--radius-sm); padding: 0 10px; text-align: left; cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pick:disabled { cursor: not-allowed; opacity: 0.5; }
     .pick.on { background: var(--win-bg); border-color: var(--win); color: var(--win); font-weight: 700; }
     textarea.input { width: 100%; min-height: 160px; padding: 12px; font-family: var(--font-mono); font-size: 13px; }
-    @media (max-width: 700px) { .result-row { grid-template-columns: 1fr 1fr; } .result-row .meta { grid-column: 1 / -1; } }
+
+    /* Grid pengaturan tanggal & struktur */
+    .admin-section { background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
+    .admin-section h2 { font-family: var(--font-display); font-weight: 400; font-size: 24px; margin-bottom: 4px; }
+    .days-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+    .day-edit-card { background: var(--surface-alt); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 16px; display: grid; gap: 10px; }
+    .day-edit-card h3 { font-family: var(--font-mono); font-size: 13px; color: var(--primary); letter-spacing: 0.06em; text-transform: uppercase; }
+    .round-sched-row { display: grid; grid-template-columns: 1.5fr 110px 140px 110px 95px 80px; gap: 8px; align-items: center; background: var(--surface-alt); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; }
+    .round-sched-row + .round-sched-row { margin-top: 6px; }
+    .match-edit-row { display: grid; grid-template-columns: 120px 1fr auto 1fr 90px 100px 70px; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; }
+    .match-edit-row + .match-edit-row { margin-top: 6px; }
+    .match-date-row { display: grid; grid-template-columns: 140px 1fr 110px 150px 140px 105px 95px; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; }
+    .match-date-row + .match-date-row { margin-top: 6px; }
+    .preset-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .preset-pill { border: 1px solid var(--outline-strong); background: var(--surface-alt); border-radius: var(--radius-sm); padding: 4px 10px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
+    .preset-pill:hover { border-color: var(--primary); color: var(--primary); }
+    .chk-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none; }
+    .chk-inline input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+    @media (max-width: 920px) {
+      .round-sched-row, .match-edit-row, .match-date-row { grid-template-columns: 1fr 1fr; }
+      .round-sched-row > :first-child, .match-edit-row > :first-child, .match-date-row > :first-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 700px) {
+      .result-row { grid-template-columns: 1fr 1fr; }
+      .result-row .meta { grid-column: 1 / -1; }
+    }
   </style>
 </head>
 <body>
   <header class="site-header">
     <div class="container header-row">
-      <a href="../" class="brand"><span class="brand-mark">U</span><span>UKM ESPORT UAJM<small>Admin</small></span></a>
+      <a href="../" class="brand"><span class="brand-mark">U</span><span>UKM ESPORT UAJM<small>Admin Panel</small></span></a>
       <div class="header-tools">
         <span class="sync" id="sync"><i></i></span>
-        <button class="icon-btn theme-btn" id="theme-btn" aria-label="Tema">
+        <button class="icon-btn theme-btn" id="theme-btn" type="button" aria-label="Tema">
           <svg class="ico-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
           <svg class="ico-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-          <span class="lbl lbl-light">Dark</span><span class="lbl lbl-dark">Light</span>
+          <span class="lbl lbl-light">Gelap</span><span class="lbl lbl-dark">Terang</span>
         </button>
       </div>
     </div>
@@ -63,38 +97,176 @@
 
     <section id="panel-view" class="hidden" style="padding:32px 0 64px">
       <div class="admin-bar">
-        <div><h1 class="view-title" style="font-size:32px">Panel Admin</h1><p class="view-sub">Masuk sebagai <strong id="who"></strong></p></div>
+        <div><h1 class="view-title" style="font-size:32px">Panel Admin Turnamen</h1><p class="view-sub">Masuk sebagai <strong id="who"></strong></p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-ghost btn-sm" href="../" target="_blank" rel="noopener">Lihat situs</a>
-          <button class="btn btn-ghost btn-sm" id="logout">Keluar</button>
+          <a class="btn btn-ghost btn-sm" href="../" target="_blank" rel="noopener">Lihat Situs Publik</a>
+          <button class="btn btn-ghost btn-sm" id="logout" type="button">Keluar</button>
         </div>
       </div>
 
       <div class="tabs" style="margin-bottom:24px">
-        <button class="tab active" data-panel="teams">Nama Tim</button>
-        <button class="tab" data-panel="results">Hasil Pertandingan</button>
-        <button class="tab" data-panel="streams">Link Siaran Langsung</button>
+        <button class="tab active" type="button" data-panel="teams">Nama Tim</button>
+        <button class="tab" type="button" data-panel="schedule">Tanggal &amp; Jadwal</button>
+        <button class="tab" type="button" data-panel="structure">Struktur Pertandingan</button>
+        <button class="tab" type="button" data-panel="results">Hasil Pertandingan</button>
+        <button class="tab" type="button" data-panel="streams">Link Siaran Langsung</button>
       </div>
 
       <!-- Tab 1: Teams -->
       <div id="panel-teams">
         <div class="admin-bar">
-          <p class="view-sub">Nama tim default kosong. Isi sesuai seed, lalu simpan.</p>
+          <p class="view-sub">Nama tim default kosong. Isi sesuai seed, lalu klik Simpan.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" id="bulk-toggle">Tempel massal</button>
-            <button class="btn btn-ghost btn-sm" id="clear-teams">Kosongkan semua</button>
-            <button class="btn btn-primary btn-sm" id="save-teams">Simpan nama tim</button>
+            <button class="btn btn-ghost btn-sm" id="bulk-toggle" type="button">Tempel Massal</button>
+            <button class="btn btn-ghost btn-sm" id="clear-teams" type="button">Kosongkan Semua</button>
+            <button class="btn btn-primary btn-sm" id="save-teams" type="button">Simpan Nama Tim</button>
           </div>
         </div>
         <div id="bulk-box" class="card hidden" style="margin-bottom:16px">
-          <p class="view-sub" style="margin-bottom:8px">Satu nama per baris, urut dari seed 1 sampai 58.</p>
+          <p class="view-sub" style="margin-bottom:8px">Satu nama tim per baris, urut dari Seed 1 sampai Seed terakhir.</p>
           <textarea class="input" id="bulk-text"></textarea>
-          <button class="btn btn-ghost btn-sm" id="bulk-apply" style="margin-top:8px">Terapkan ke form</button>
+          <button class="btn btn-ghost btn-sm" id="bulk-apply" type="button" style="margin-top:8px">Terapkan ke Form</button>
         </div>
         <div class="team-edit" id="team-edit"></div>
       </div>
 
-      <!-- Tab 2: Results -->
+      <!-- Tab 2: Schedule & Dates -->
+      <div id="panel-schedule" class="hidden">
+        <div class="admin-bar">
+          <div>
+            <h2 class="view-title" style="font-size:26px">Pengaturan Tanggal &amp; Jadwal Pertandingan</h2>
+            <p class="view-sub">Ubah tanggal hari pelaksanaan, rentang tanggal banner utama, jadwal jam per babak, maupun tanggal &amp; jam masing-masing pertandingan.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" id="reset-schedule" type="button">Reset Jadwal Default</button>
+            <button class="btn btn-primary btn-sm" id="save-schedule" type="button">Simpan Tanggal &amp; Jadwal</button>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-bar" style="margin-bottom:12px">
+            <div>
+              <h2>1. Tanggal Pelaksanaan Turnamen (Hari 1, Hari 2, Hari 3)</h2>
+              <p class="view-sub">Pilih tanggal dari kalender atau ketik langsung. Mengubah tanggal hari akan otomatis memperbarui tanggal seluruh pertandingan di hari tersebut.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="sync-banner-dates" type="button">Otomatis Buat Label Rentang Tanggal</button>
+          </div>
+          <label class="field" style="max-width:460px">
+            <span>Label Rentang Tanggal di Banner Utama &amp; Header Jadwal</span>
+            <input class="input" id="cfg-dates-banner" placeholder="Contoh: 10 – 12 NOV 2026">
+          </label>
+          <div class="days-grid" id="days-edit-grid"></div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-bar" style="margin-bottom:12px">
+            <div>
+              <h2>2. Jadwal Hari, Tanggal, Jam &amp; Format per Babak / Kloter</h2>
+              <p class="view-sub">Atur hari ke berapa, tanggal spesifik (opsional), jam mulai (WIB), format BO, dan status Live Stream untuk setiap babak.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="save-schedule-rounds" type="button">Simpan Jadwal Babak</button>
+          </div>
+          <div id="round-schedule-list"></div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-bar" style="margin-bottom:12px">
+            <div>
+              <h2>3. Ubah Tanggal &amp; Jam Per Pertandingan Spesifik</h2>
+              <p class="view-sub">Kustomisasi tanggal, hari, jam, kloter, atau format untuk pertandingan tertentu secara individual.</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select class="select" id="sched-round-filter">
+                <option value="all">Semua babak</option>
+                <option>Round 1</option><option>Round of 32</option><option>Round of 16</option>
+                <option>Quarterfinals</option><option>Semifinals</option><option>3rd Place Match</option><option>Grand Final</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="save-match-dates" type="button">Simpan Jadwal Pertandingan</button>
+            </div>
+          </div>
+          <div id="match-dates-list"></div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Tournament & Match Structure -->
+      <div id="panel-structure" class="hidden">
+        <div class="admin-bar">
+          <div>
+            <h2 class="view-title" style="font-size:26px">Pengaturan Struktur Pertandingan &amp; Bagan Bracket</h2>
+            <p class="view-sub">Atur jumlah tim peserta, mode bagan, perebutan juara 3, acak posisi seed tim, atau ubah pasangan lawan di setiap pertandingan.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" id="shuffle-seeds" type="button">Acak Urutan Tim (Shuffle)</button>
+            <button class="btn btn-ghost btn-sm" id="reset-structure" type="button">Reset Struktur Default (58 Tim)</button>
+            <button class="btn btn-primary btn-sm" id="save-structure" type="button">Simpan Struktur Pertandingan</button>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <h2>1. Konfigurasi Struktur Utama Bracket</h2>
+          <p class="view-sub" style="margin-bottom:16px">Ubah jumlah tim peserta (4 s/d 64 tim), sistem penempatan BYE, dan opsi pertandingan perebutan Juara 3 (3rd Place Match).</p>
+          <div class="days-grid">
+            <div class="day-edit-card">
+              <h3>Jumlah Slot Tim Peserta</h3>
+              <label class="field" style="margin-bottom:4px">
+                <span>Jumlah Tim (4 – 64 Tim)</span>
+                <input class="input" id="cfg-team-count" type="number" min="4" max="64" value="58">
+              </label>
+              <div class="preset-pills">
+                <button type="button" class="preset-pill" data-team-preset="8">8 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="16">16 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="32">32 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="58">58 Tim (Default)</button>
+                <button type="button" class="preset-pill" data-team-preset="64">64 Tim</button>
+              </div>
+            </div>
+
+            <div class="day-edit-card">
+              <h3>Mode Struktur &amp; BYE</h3>
+              <label class="field" style="margin-bottom:0">
+                <span>Tipe Susunan Bagan</span>
+                <select class="select" id="cfg-structure-mode">
+                  <option value="challonge58">Standar Challonge 58 Tim (6 BYE Resmi)</option>
+                  <option value="auto">Otomatis Seimbang (Single Elimination)</option>
+                </select>
+              </label>
+              <small style="color:var(--muted);font-size:12px">Jika jumlah tim bukan 58, sistem otomatis menyusun pohon Single Elimination beserta distribusi BYE yang merata.</small>
+            </div>
+
+            <div class="day-edit-card">
+              <h3>Perebutan Juara 3</h3>
+              <label class="field" style="margin-bottom:0">
+                <span>Pertandingan 3rd Place (Bronze Match)</span>
+                <select class="select" id="cfg-third-place">
+                  <option value="true">Aktif (Ada Perebutan Juara 3)</option>
+                  <option value="false">Nonaktif (Langsung Grand Final)</option>
+                </select>
+              </label>
+              <small style="color:var(--muted);font-size:12px">Menentukan apakah tim yang kalah di Semifinal bertanding memperebutkan Juara 3.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-bar" style="margin-bottom:12px">
+            <div>
+              <h2>2. Editor Struktur Slot, Lawan &amp; Format Per Pertandingan</h2>
+              <p class="view-sub">Ubah tim atau sumber pemenang pada Slot 1 dan Slot 2, tukar posisi slot, atur kloter, format BO1/BO3/BO5/BO7, dan status Live Stream tiap laga.</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select class="select" id="struct-round-filter">
+                <option value="all">Semua babak</option>
+                <option>Round 1</option><option>Round of 32</option><option>Round of 16</option>
+                <option>Quarterfinals</option><option>Semifinals</option><option>3rd Place Match</option><option>Grand Final</option>
+              </select>
+              <button class="btn btn-primary btn-sm" id="save-match-structure" type="button">Simpan Struktur Laga</button>
+            </div>
+          </div>
+          <div id="match-structure-list"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Results -->
       <div id="panel-results" class="hidden">
         <div class="admin-bar">
           <select class="select" id="round-filter">
@@ -108,7 +280,7 @@
         <div id="result-list"></div>
       </div>
 
-      <!-- Tab 3: Streams -->
+      <!-- Tab 5: Streams -->
       <div id="panel-streams" class="hidden">
         <div class="admin-bar">
           <div>
@@ -116,8 +288,8 @@
             <p class="view-sub">Atur link siaran langsung channel. Jika link dikosongkan, channel otomatis nonaktif dan tidak bisa diklik di halaman publik.</p>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" id="clear-streams">Kosongkan Semua</button>
-            <button class="btn btn-primary btn-sm" id="save-streams">Simpan Link Siaran</button>
+            <button class="btn btn-ghost btn-sm" id="clear-streams" type="button">Kosongkan Semua</button>
+            <button class="btn btn-primary btn-sm" id="save-streams" type="button">Simpan Link Siaran</button>
           </div>
         </div>
 
@@ -136,7 +308,7 @@
           </label>
           <label class="field">
             <span>Link Live Twitch</span>
-            <input class="input" id="stream-twitch" placeholder="https://twitch.tv/channel" autocomplete="off">
+            <input class="input" id="stream-twitch" placeholder="https://twitch.com/channel" autocomplete="off">
           </label>
           <label class="field">
             <span>Link Live PRISM Live Studio</span>

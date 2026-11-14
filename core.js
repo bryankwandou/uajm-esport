@@ -13,11 +13,89 @@ export const DEFAULT_STREAMS = {
   prism: ''
 };
 
+export const DEFAULT_DAYS = [
+  { day: 1, date: '10 Nov 2026', iso: '2026-11-10', title: 'Round 1 → Quarterfinals' },
+  { day: 2, date: '11 Nov 2026', iso: '2026-11-11', title: 'Semifinals Showdown' },
+  { day: 3, date: '12 Nov 2026', iso: '2026-11-12', title: '3rd Place & Grand Final' }
+];
+
+export const DEFAULT_ROUND_SCHEDULE = {
+  R1_K1: { key: 'R1_K1', label: 'Round 1 (Kloter 1)', round: 'Round 1', kloter: 1, day: 1, time: '18.30', format: 'BO1', stream: false },
+  R1_K2: { key: 'R1_K2', label: 'Round 1 (Kloter 2)', round: 'Round 1', kloter: 2, day: 1, time: '18.45', format: 'BO1', stream: false },
+  R32_K1: { key: 'R32_K1', label: 'Round of 32 (Kloter 1)', round: 'Round of 32', kloter: 1, day: 1, time: '19.25', format: 'BO1', stream: false },
+  R32_K2: { key: 'R32_K2', label: 'Round of 32 (Kloter 2)', round: 'Round of 32', kloter: 2, day: 1, time: '19.40', format: 'BO1', stream: false },
+  R16: { key: 'R16', label: 'Round of 16', round: 'Round of 16', kloter: null, day: 1, time: '20.20', format: 'BO1', stream: false },
+  QF: { key: 'QF', label: 'Quarterfinals', round: 'Quarterfinals', kloter: null, day: 1, time: '21.00', format: 'BO1', stream: false },
+  SF1: { key: 'SF1', label: 'Semifinal 1', round: 'Semifinals', matchIndex: 0, kloter: null, day: 2, time: '18.30', format: 'BO3', stream: true },
+  SF2: { key: 'SF2', label: 'Semifinal 2', round: 'Semifinals', matchIndex: 1, kloter: null, day: 2, time: '19.45', format: 'BO3', stream: true },
+  THIRD: { key: 'THIRD', label: '3rd Place Match', round: '3rd Place Match', kloter: null, day: 3, time: '18.30', format: 'BO3', stream: true },
+  GF: { key: 'GF', label: 'Grand Final', round: 'Grand Final', kloter: null, day: 3, time: '19.45', format: 'BO5', stream: true }
+};
+
+export function defaultConfig() {
+  return {
+    datesBanner: '10 – 12 NOV 2026',
+    teamCount: 58,
+    thirdPlace: true,
+    customStructure: false,
+    days: DEFAULT_DAYS.map(d => ({ ...d })),
+    roundSchedule: Object.fromEntries(
+      Object.entries(DEFAULT_ROUND_SCHEDULE).map(([k, v]) => [k, { ...v }])
+    ),
+    matchOverrides: {}
+  };
+}
+
+export function normalizeConfig(raw) {
+  const base = defaultConfig();
+  if (!raw || typeof raw !== 'object') return base;
+  if (typeof raw.datesBanner === 'string' && raw.datesBanner.trim()) {
+    base.datesBanner = raw.datesBanner.trim();
+  }
+  if (raw.teamCount !== undefined) {
+    const n = Number(raw.teamCount);
+    if (Number.isFinite(n) && n >= 4 && n <= 64) base.teamCount = Math.round(n);
+  }
+  if (typeof raw.thirdPlace === 'boolean') base.thirdPlace = raw.thirdPlace;
+  if (typeof raw.customStructure === 'boolean') base.customStructure = raw.customStructure;
+
+  if (Array.isArray(raw.days) && raw.days.length > 0) {
+    base.days = raw.days.map((d, idx) => ({
+      day: Number(d.day) || (idx + 1),
+      date: typeof d.date === 'string' && d.date.trim() ? d.date.trim() : (DEFAULT_DAYS[idx]?.date || `Day ${idx + 1}`),
+      iso: typeof d.iso === 'string' ? d.iso : (DEFAULT_DAYS[idx]?.iso || ''),
+      title: typeof d.title === 'string' && d.title.trim() ? d.title.trim() : (DEFAULT_DAYS[idx]?.title || '')
+    }));
+  }
+
+  if (raw.roundSchedule && typeof raw.roundSchedule === 'object') {
+    for (const key of Object.keys(base.roundSchedule)) {
+      const item = raw.roundSchedule[key];
+      if (item && typeof item === 'object') {
+        base.roundSchedule[key] = {
+          ...base.roundSchedule[key],
+          day: Number(item.day) || base.roundSchedule[key].day,
+          date: typeof item.date === 'string' ? item.date.trim() : '',
+          time: typeof item.time === 'string' && item.time.trim() ? item.time.trim() : base.roundSchedule[key].time,
+          format: typeof item.format === 'string' && item.format.trim() ? item.format.trim() : base.roundSchedule[key].format,
+          stream: typeof item.stream === 'boolean' ? item.stream : base.roundSchedule[key].stream
+        };
+      }
+    }
+  }
+
+  if (raw.matchOverrides && typeof raw.matchOverrides === 'object') {
+    base.matchOverrides = { ...raw.matchOverrides };
+  }
+  return base;
+}
+
 export function emptyState() {
   return {
     teams: {},
     results: {},
-    streams: { ...DEFAULT_STREAMS }
+    streams: { ...DEFAULT_STREAMS },
+    config: defaultConfig()
   };
 }
 
@@ -28,7 +106,8 @@ export function readCache() {
       return {
         teams: parsed.teams || {},
         results: parsed.results || {},
-        streams: Object.assign({ ...DEFAULT_STREAMS }, parsed.streams || {})
+        streams: Object.assign({ ...DEFAULT_STREAMS }, parsed.streams || {}),
+        config: normalizeConfig(parsed.config)
       };
     }
   } catch {
@@ -48,7 +127,8 @@ export async function fetchRemote() {
   return {
     teams: data.teams || {},
     results: data.results || {},
-    streams: Object.assign({ ...DEFAULT_STREAMS }, data.streams || {})
+    streams: Object.assign({ ...DEFAULT_STREAMS }, data.streams || {}),
+    config: normalizeConfig(data.config)
   };
 }
 
@@ -63,17 +143,381 @@ export function subscribeRemote(onChange) {
 
 export function teamName(state, teamId) {
   if (!teamId) return '';
-  const raw = state.teams[teamId];
+  const raw = state?.teams?.[teamId];
   return typeof raw === 'string' ? raw.trim() : '';
 }
 
-const TEAM_INDEX = new Map(TEAMS_DATA.map(team => [team.id, team]));
-export function teamMeta(teamId) {
-  return TEAM_INDEX.get(teamId) || null;
+export function padTeamId(seed) {
+  return `T${String(seed).padStart(2, '0')}`;
+}
+
+function roundNameForMatches(matchCount, isPreliminary) {
+  if (isPreliminary) return 'Round 1';
+  if (matchCount === 32) return 'Round 1';
+  if (matchCount === 16) return 'Round of 32';
+  if (matchCount === 8) return 'Round of 16';
+  if (matchCount === 4) return 'Quarterfinals';
+  if (matchCount === 2) return 'Semifinals';
+  if (matchCount === 1) return 'Grand Final';
+  return `Round (${matchCount * 2})`;
+}
+
+// Generator Single Elimination dinamis untuk jumlah tim 4 s/d 64
+export function generateBracketMatches(teamCount, thirdPlace = true) {
+  const n = Math.max(4, Math.min(64, Math.round(Number(teamCount) || 58)));
+  const p = Math.pow(2, Math.ceil(Math.log2(n)));
+  const byes = p - n;
+  const prelimMatchesCount = n - (p / 2);
+
+  let matchCounter = 1;
+  const nextId = () => `M${matchCounter++}`;
+  const allMatches = [];
+
+  if (prelimMatchesCount > 0) {
+    const firstFullCount = p / 4;
+    const prelimMatches = [];
+    for (let i = 0; i < prelimMatchesCount; i++) {
+      const kloter = prelimMatchesCount > 8 ? (i < Math.ceil(prelimMatchesCount / 2) ? 1 : 2) : 1;
+      prelimMatches.push({
+        id: nextId(),
+        round: 'Round 1',
+        day: 1,
+        date: '10 Nov 2026',
+        time: kloter === 2 ? '18.45' : '18.30',
+        kloter,
+        format: 'BO1',
+        s0: null,
+        s1: null,
+        next: null
+      });
+    }
+
+    const fullRoundName = roundNameForMatches(firstFullCount, false);
+    const fullMatches = [];
+    for (let i = 0; i < firstFullCount; i++) {
+      const kloter = firstFullCount >= 8 ? (i < Math.ceil(firstFullCount / 2) ? 1 : 2) : null;
+      fullMatches.push({
+        id: nextId(),
+        round: fullRoundName,
+        day: 1,
+        date: '10 Nov 2026',
+        time: kloter === 2 ? '19.40' : '19.25',
+        kloter,
+        format: 'BO1',
+        s0: null,
+        s1: null,
+        bye: false,
+        next: null
+      });
+    }
+
+    // Sebar BYE secara merata pada slot 0 (dan slot 1 jika byes > firstFullCount)
+    const byeSlots = new Set();
+    const firstPass = Math.min(byes, firstFullCount);
+    for (let k = 0; k < firstPass; k++) {
+      const idx = Math.floor((k * firstFullCount) / firstPass);
+      let target = idx;
+      while (byeSlots.has(`${target}:0`)) target = (target + 1) % firstFullCount;
+      byeSlots.add(`${target}:0`);
+    }
+    const secondPass = byes - firstPass;
+    for (let k = 0; k < secondPass; k++) {
+      const idx = Math.floor((k * firstFullCount) / secondPass);
+      let target = idx;
+      while (byeSlots.has(`${target}:1`)) target = (target + 1) % firstFullCount;
+      byeSlots.add(`${target}:1`);
+    }
+
+    let seedCursor = 1;
+    let prelimCursor = 0;
+    for (let i = 0; i < firstFullCount; i++) {
+      for (const slot of [0, 1]) {
+        if (byeSlots.has(`${i}:${slot}`)) {
+          const tId = padTeamId(seedCursor++);
+          if (slot === 0) fullMatches[i].s0 = { t: tId };
+          else fullMatches[i].s1 = { t: tId };
+          fullMatches[i].bye = true;
+        } else {
+          const pm = prelimMatches[prelimCursor++];
+          pm.next = { m: fullMatches[i].id, slot };
+          if (slot === 0) fullMatches[i].s0 = { w: pm.id };
+          else fullMatches[i].s1 = { w: pm.id };
+        }
+      }
+    }
+
+    for (const pm of prelimMatches) {
+      pm.s0 = { t: padTeamId(seedCursor++) };
+      pm.s1 = { t: padTeamId(seedCursor++) };
+      allMatches.push(pm);
+    }
+    allMatches.push(...fullMatches);
+
+    let prevRoundMatches = fullMatches;
+    while (prevRoundMatches.length > 1) {
+      const count = prevRoundMatches.length / 2;
+      const rName = roundNameForMatches(count, false);
+      const currentRound = [];
+      for (let i = 0; i < count; i++) {
+        const m0 = prevRoundMatches[2 * i];
+        const m1 = prevRoundMatches[2 * i + 1];
+        const mId = nextId();
+        m0.next = { m: mId, slot: 0 };
+        m1.next = { m: mId, slot: 1 };
+        currentRound.push({
+          id: mId,
+          round: rName,
+          day: rName === 'Semifinals' ? 2 : (rName === 'Grand Final' ? 3 : 1),
+          date: rName === 'Semifinals' ? '11 Nov 2026' : (rName === 'Grand Final' ? '12 Nov 2026' : '10 Nov 2026'),
+          time: rName === 'Grand Final' ? '19.45' : (rName === 'Semifinals' ? (i === 0 ? '18.30' : '19.45') : (rName === 'Quarterfinals' ? '21.00' : '20.20')),
+          kloter: null,
+          stream: rName === 'Semifinals' || rName === 'Grand Final',
+          format: rName === 'Grand Final' ? 'BO5' : (rName === 'Semifinals' ? 'BO3' : 'BO1'),
+          s0: { w: m0.id },
+          s1: { w: m1.id },
+          next: null
+        });
+      }
+
+      if (count === 1 && thirdPlace && prevRoundMatches.length === 2) {
+        const gf = currentRound[0];
+        const thirdId = gf.id;
+        const realGfId = nextId();
+        gf.id = realGfId;
+        prevRoundMatches[0].next = { m: realGfId, slot: 0 };
+        prevRoundMatches[1].next = { m: realGfId, slot: 1 };
+        prevRoundMatches[0].nextLoser = { m: thirdId, slot: 0 };
+        prevRoundMatches[1].nextLoser = { m: thirdId, slot: 1 };
+        allMatches.push({
+          id: thirdId,
+          round: '3rd Place Match',
+          day: 3,
+          date: '12 Nov 2026',
+          time: '18.30',
+          kloter: null,
+          stream: true,
+          format: 'BO3',
+          s0: { l: prevRoundMatches[0].id },
+          s1: { l: prevRoundMatches[1].id },
+          next: null
+        });
+      }
+
+      allMatches.push(...currentRound);
+      prevRoundMatches = currentRound;
+    }
+  } else {
+    // Jumlah tim tepat pangkat 2 (4, 8, 16, 32, 64) - tanpa BYE
+    let count = p / 2;
+    let seedCursor = 1;
+    let prevRoundMatches = [];
+    while (count >= 1) {
+      const rName = roundNameForMatches(count, false);
+      const currentRound = [];
+      for (let i = 0; i < count; i++) {
+        const mId = nextId();
+        const kloter = count >= 16 ? (i < count / 2 ? 1 : 2) : null;
+        if (prevRoundMatches.length === 0) {
+          currentRound.push({
+            id: mId,
+            round: rName,
+            day: rName === 'Semifinals' ? 2 : (rName === 'Grand Final' ? 3 : 1),
+            date: '10 Nov 2026',
+            time: kloter === 2 ? '18.45' : '18.30',
+            kloter,
+            stream: rName === 'Semifinals' || rName === 'Grand Final',
+            format: rName === 'Grand Final' ? 'BO5' : (rName === 'Semifinals' ? 'BO3' : 'BO1'),
+            s0: { t: padTeamId(seedCursor++) },
+            s1: { t: padTeamId(seedCursor++) },
+            next: null
+          });
+        } else {
+          const m0 = prevRoundMatches[2 * i];
+          const m1 = prevRoundMatches[2 * i + 1];
+          m0.next = { m: mId, slot: 0 };
+          m1.next = { m: mId, slot: 1 };
+          currentRound.push({
+            id: mId,
+            round: rName,
+            day: rName === 'Semifinals' ? 2 : (rName === 'Grand Final' ? 3 : 1),
+            date: rName === 'Semifinals' ? '11 Nov 2026' : (rName === 'Grand Final' ? '12 Nov 2026' : '10 Nov 2026'),
+            time: rName === 'Grand Final' ? '19.45' : (rName === 'Semifinals' ? (i === 0 ? '18.30' : '19.45') : (rName === 'Quarterfinals' ? '21.00' : '20.20')),
+            kloter,
+            stream: rName === 'Semifinals' || rName === 'Grand Final',
+            format: rName === 'Grand Final' ? 'BO5' : (rName === 'Semifinals' ? 'BO3' : 'BO1'),
+            s0: { w: m0.id },
+            s1: { w: m1.id },
+            next: null
+          });
+        }
+      }
+
+      if (count === 1 && thirdPlace && prevRoundMatches.length === 2) {
+        const gf = currentRound[0];
+        const thirdId = gf.id;
+        const realGfId = nextId();
+        gf.id = realGfId;
+        prevRoundMatches[0].next = { m: realGfId, slot: 0 };
+        prevRoundMatches[1].next = { m: realGfId, slot: 1 };
+        prevRoundMatches[0].nextLoser = { m: thirdId, slot: 0 };
+        prevRoundMatches[1].nextLoser = { m: thirdId, slot: 1 };
+        allMatches.push({
+          id: thirdId,
+          round: '3rd Place Match',
+          day: 3,
+          date: '12 Nov 2026',
+          time: '18.30',
+          kloter: null,
+          stream: true,
+          format: 'BO3',
+          s0: { l: prevRoundMatches[0].id },
+          s1: { l: prevRoundMatches[1].id },
+          next: null
+        });
+      }
+
+      allMatches.push(...currentRound);
+      prevRoundMatches = currentRound;
+      count = Math.floor(count / 2);
+    }
+  }
+
+  return allMatches;
+}
+
+function scheduleKeyForMatch(match, semiIndex) {
+  if (match.round === 'Round 1') return match.kloter === 2 ? 'R1_K2' : 'R1_K1';
+  if (match.round === 'Round of 32') return match.kloter === 2 ? 'R32_K2' : 'R32_K1';
+  if (match.round === 'Round of 16') return 'R16';
+  if (match.round === 'Quarterfinals') return 'QF';
+  if (match.round === 'Semifinals') return semiIndex === 1 ? 'SF2' : 'SF1';
+  if (match.round === '3rd Place Match') return 'THIRD';
+  if (match.round === 'Grand Final') return 'GF';
+  return null;
+}
+
+export function getActiveMatches(state) {
+  const cfg = normalizeConfig(state?.config);
+  let base;
+  if (cfg.teamCount === 58 && !cfg.customStructure) {
+    base = BRACKET_MATCHES
+      .filter(m => cfg.thirdPlace || m.round !== '3rd Place Match')
+      .map(m => ({
+        ...m,
+        s0: m.s0 ? { ...m.s0 } : null,
+        s1: m.s1 ? { ...m.s1 } : null,
+        next: m.next ? { ...m.next } : null,
+        nextLoser: (!cfg.thirdPlace && m.nextLoser) ? null : (m.nextLoser ? { ...m.nextLoser } : undefined)
+      }));
+  } else {
+    base = generateBracketMatches(cfg.teamCount, cfg.thirdPlace);
+  }
+
+  let semiCounter = 0;
+  for (const match of base) {
+    const sIdx = match.round === 'Semifinals' ? semiCounter++ : 0;
+    const sKey = scheduleKeyForMatch(match, sIdx);
+    const rs = sKey ? cfg.roundSchedule[sKey] : null;
+    if (rs) {
+      match.day = Number(rs.day) || match.day;
+      match.time = rs.time || match.time;
+      match.format = rs.format || match.format;
+      if (typeof rs.stream === 'boolean') match.stream = rs.stream;
+    }
+    const dayObj = cfg.days.find(d => Number(d.day) === Number(match.day));
+    if (rs && rs.date) {
+      match.date = rs.date;
+    } else if (dayObj && dayObj.date) {
+      match.date = dayObj.date;
+    }
+
+    const ov = cfg.matchOverrides?.[match.id];
+    if (ov && typeof ov === 'object') {
+      if (ov.day !== undefined && Number(ov.day)) {
+        match.day = Number(ov.day);
+        const ovDay = cfg.days.find(d => Number(d.day) === Number(match.day));
+        if (ovDay && !ov.date) match.date = ovDay.date;
+      }
+      if (typeof ov.date === 'string' && ov.date.trim()) match.date = ov.date.trim();
+      if (typeof ov.time === 'string' && ov.time.trim()) match.time = ov.time.trim();
+      if (typeof ov.format === 'string' && ov.format.trim()) match.format = ov.format.trim();
+      if (ov.kloter !== undefined) match.kloter = ov.kloter ? Number(ov.kloter) : null;
+      if (typeof ov.stream === 'boolean') match.stream = ov.stream;
+      if (ov.s0 && typeof ov.s0 === 'object') match.s0 = { ...ov.s0 };
+      if (ov.s1 && typeof ov.s1 === 'object') match.s1 = { ...ov.s1 };
+    }
+  }
+  return base;
+}
+
+export function getActiveTeams(state) {
+  const cfg = normalizeConfig(state?.config);
+  const matches = getActiveMatches(state);
+  const hasRound1 = matches.some(m => m.round === 'Round 1');
+  const entryMap = new Map();
+
+  for (const match of matches) {
+    [match.s0, match.s1].forEach((slotDef, idx) => {
+      if (slotDef && slotDef.t && !entryMap.has(slotDef.t)) {
+        const isBye = hasRound1 && match.round !== 'Round 1';
+        entryMap.set(slotDef.t, {
+          entryMatch: match.id,
+          slot: idx,
+          initialRound: match.round,
+          kloter: match.kloter,
+          initialTime: match.time,
+          initialDate: match.date,
+          hasBye: isBye,
+          seedStatus: isBye ? 'BYE Seed' : 'Reguler'
+        });
+      }
+    });
+  }
+
+  const list = [];
+  for (let seed = 1; seed <= cfg.teamCount; seed++) {
+    const id = padTeamId(seed);
+    const fallback = TEAMS_DATA[seed - 1] || {};
+    const entry = entryMap.get(id) || {
+      entryMatch: fallback.entryMatch || 'M1',
+      slot: fallback.slot || 0,
+      initialRound: fallback.initialRound || 'Round 1',
+      kloter: fallback.kloter || 1,
+      initialTime: fallback.initialTime || '18.30',
+      initialDate: '10 Nov 2026',
+      hasBye: Boolean(fallback.hasBye),
+      seedStatus: fallback.seedStatus || 'Reguler'
+    };
+    list.push({
+      id,
+      seed,
+      name: teamName(state, id),
+      ...entry
+    });
+  }
+  return list;
+}
+
+const STATIC_TEAM_INDEX = new Map(TEAMS_DATA.map(team => [team.id, team]));
+export function teamMeta(teamId, state) {
+  if (!teamId) return null;
+  if (state) {
+    const list = getActiveTeams(state);
+    const found = list.find(t => t.id === teamId);
+    if (found) return found;
+  }
+  if (STATIC_TEAM_INDEX.has(teamId)) return STATIC_TEAM_INDEX.get(teamId);
+  const m = /^T(\d+)$/.exec(teamId);
+  if (m) {
+    const seed = Number(m[1]);
+    return { id: teamId, seed, name: '', entryMatch: 'M1', slot: 0, initialRound: 'Round 1', kloter: 1, initialTime: '18.30', hasBye: false };
+  }
+  return null;
 }
 
 // Mengembalikan daftar pertandingan dengan ID tim yang sudah diselesaikan.
 export function resolveMatches(state) {
+  const activeMatches = getActiveMatches(state);
   const resolved = new Map();
   const slotTeam = (definition) => {
     if (!definition || typeof definition !== 'object') return null;
@@ -85,9 +529,9 @@ export function resolveMatches(state) {
     return definition.w ? winnerId : loserId;
   };
 
-  for (const match of BRACKET_MATCHES) {
+  for (const match of activeMatches) {
     const teams = [slotTeam(match.s0), slotTeam(match.s1)];
-    const result = state.results[match.id];
+    const result = state?.results?.[match.id];
     const slot = result && (result.w === 0 || result.w === 1) ? result.w : null;
     const winnerSlot = slot !== null && teams[slot] ? slot : null;
     resolved.set(match.id, {
@@ -108,17 +552,22 @@ export function eliminatedTeams(resolved) {
     const loser = match.teams[1 - match.winnerSlot];
     if (loser) out.add(loser);
   }
-  const third = resolved.get('M57');
-  if (third && third.done) out.add(third.teams[1 - third.winnerSlot]);
+  for (const match of resolved.values()) {
+    if (match.round === '3rd Place Match' && match.done) {
+      const loser = match.teams[1 - match.winnerSlot];
+      if (loser) out.add(loser);
+    }
+  }
   return out;
 }
 
-export function downstreamMatches(matchId) {
+export function downstreamMatches(matchId, state) {
+  const activeMatches = getActiveMatches(state);
   const out = [];
   const queue = [matchId];
   while (queue.length) {
     const currentId = queue.shift();
-    const current = BRACKET_MATCHES.find(item => item.id === currentId);
+    const current = activeMatches.find(item => item.id === currentId);
     if (!current) continue;
     for (const link of [current.next, current.nextLoser]) {
       if (link && !out.includes(link.m)) {
@@ -126,8 +575,27 @@ export function downstreamMatches(matchId) {
         queue.push(link.m);
       }
     }
+    // Cek juga apakah ada pertandingan lain yang mereferensikan currentId via s0/s1 override
+    for (const m of activeMatches) {
+      const refs = [m.s0?.w, m.s0?.l, m.s1?.w, m.s1?.l];
+      if (refs.includes(currentId) && !out.includes(m.id)) {
+        out.push(m.id);
+        queue.push(m.id);
+      }
+    }
   }
   return out;
+}
+
+export function formatIsoDateId(isoStr) {
+  if (!isoStr || typeof isoStr !== 'string') return '';
+  const parts = isoStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return '';
+  const [year, month, day] = parts;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const mName = months[month - 1];
+  if (!mName) return '';
+  return `${day} ${mName} ${year}`;
 }
 
 export function escapeHtml(text) {
