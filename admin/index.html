@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="/styles.css">
   <style>
     .login { max-width: 400px; margin: 72px auto; }
     .field { display: grid; gap: 6px; margin-bottom: 16px; font-size: 14px; font-weight: 600; }
@@ -71,7 +71,7 @@
 <body>
   <header class="site-header">
     <div class="container header-row">
-      <a href="../" class="brand"><span class="brand-mark">U</span><span>UKM ESPORT UAJM<small>Admin Panel</small></span></a>
+      <a href="/" class="brand"><span class="brand-mark">U</span><span>UKM ESPORT UAJM<small>Admin Panel</small></span></a>
       <div class="header-tools">
         <span class="sync" id="sync"><i></i></span>
         <button class="icon-btn theme-btn" id="theme-btn" type="button" aria-label="Tema">
@@ -99,7 +99,7 @@
       <div class="admin-bar">
         <div><h1 class="view-title" style="font-size:32px">Panel Admin Turnamen</h1><p class="view-sub">Masuk sebagai <strong id="who"></strong></p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn btn-ghost btn-sm" href="../" target="_blank" rel="noopener">Lihat Situs Publik</a>
+          <a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">Lihat Situs Publik</a>
           <button class="btn btn-ghost btn-sm" id="logout" type="button">Keluar</button>
         </div>
       </div>
@@ -320,6 +320,6 @@
   </main>
 
   <div class="toast" id="toast" role="status"></div>
-  <script type="module" src="admin.js"></script>
+  <script type="module" src="/admin/admin.js"></script>
 </body>
 </html>
