@@ -8,9 +8,9 @@ import {
 } from './core.js';
 
 const ROUTES = ['home', 'bracket', 'schedule', 'teams', 'rules', 'stream'];
-const CARD_WIDTH = 234;
+const CARD_WIDTH = 208;
 const CARD_HEIGHT = 52;
-const COLUMN_STEP = 290;
+const COLUMN_STEP = 280;
 const TOP_OFFSET = 56;
 const SLOT_HEIGHT = 128;
 
@@ -37,10 +37,19 @@ function applyLanguage() {
   ui.t = getDictionary(ui.lang);
   document.documentElement.lang = ui.lang;
   document.documentElement.dir = RTL_LANGUAGES.has(ui.lang) ? 'rtl' : 'ltr';
-  document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = ui.t[node.dataset.i18n]; });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(node => { node.placeholder = ui.t[node.dataset.i18nPlaceholder]; });
+  document.querySelectorAll('[data-i18n]').forEach(node => {
+    const val = ui.t[node.dataset.i18n];
+    if (val !== undefined) node.textContent = val;
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(node => {
+    const val = ui.t[node.dataset.i18nPlaceholder];
+    if (val !== undefined) node.placeholder = val;
+  });
   $('#lang-select').setAttribute('aria-label', ui.t.language);
   $('#theme-btn').setAttribute('aria-label', ui.t.theme);
+  document.querySelectorAll('[data-quick-lang]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.quickLang === ui.lang);
+  });
 }
 
 /* ---------- Routing ---------- */
@@ -142,6 +151,10 @@ function renderBracket() {
     const left = position.col * COLUMN_STEP + 16;
     const top = position.cy - CARD_HEIGHT / 2;
     const number = match.id.replace('M', '');
+    if (match.id === 'M58' || match.id === 'M57') {
+      const tagText = match.id === 'M58' ? 'Grand Final (BO5)' : '3rd Place Match (BO3)';
+      cards += `<div class="match-tag" style="left:${left + 26}px;top:${top - 18}px">${tagText}</div>`;
+    }
     cards += `<div class="match ${match.stream ? 'stream' : ''}" data-match="${match.id}" style="left:${left}px;top:${top}px">
       <span class="match-no">${number}</span>
       <div class="match-box">${rowHtml(match, 0)}${rowHtml(match, 1)}</div>
@@ -164,6 +177,8 @@ function renderBracket() {
   stage.style.width = `${width}px`;
   stage.style.height = `${height}px`;
   stage.style.zoom = ui.zoom;
+  const zoomNode = $('#zoom-level');
+  if (zoomNode) zoomNode.textContent = `${Math.round(ui.zoom * 100)}%`;
   stage.innerHTML = `<svg class="bracket-svg" width="${width}" height="${height}">${paths.join('')}</svg>${cards}`;
   applyBracketSearch();
 }
@@ -199,11 +214,20 @@ function setupBracketInteractions() {
   const setZoom = (value) => {
     ui.zoom = Math.min(1.6, Math.max(0.4, Math.round(value * 100) / 100));
     stage.style.zoom = ui.zoom;
+    const zoomNode = $('#zoom-level');
+    if (zoomNode) zoomNode.textContent = `${Math.round(ui.zoom * 100)}%`;
   };
   $('#zoom-in').addEventListener('click', () => setZoom(ui.zoom + 0.1));
   $('#zoom-out').addEventListener('click', () => setZoom(ui.zoom - 0.1));
   $('#zoom-reset').addEventListener('click', () => { setZoom(window.innerWidth < 640 ? 0.75 : 1); shell.scrollTo({ left: 0, top: 0 }); });
   $('#bracket-search').addEventListener('input', applyBracketSearch);
+
+  document.querySelectorAll('[data-jump-col]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const col = Number(btn.dataset.jumpCol) || 0;
+      shell.scrollTo({ left: col * COLUMN_STEP * ui.zoom, behavior: 'smooth' });
+    });
+  });
 
   let drag = null;
   shell.addEventListener('pointerdown', event => {
@@ -340,38 +364,43 @@ const CHANNELS_CONFIG = [
   }
 ];
 
-function renderStream() {
-  const container = $('#channels-grid');
-  if (container) {
-    const streams = ui.data.streams || {};
-    container.innerHTML = CHANNELS_CONFIG.map(ch => {
-      const url = (streams[ch.key] || '').trim();
-      const isActive = Boolean(url && url.length > 5);
-      const tag = isActive ? 'a' : 'div';
-      const hrefAttr = isActive ? `href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"` : 'aria-disabled="true"';
-      const statusPill = isActive
-        ? `<span class="pill-live"><i></i>${escapeHtml(ui.t.liveActive || 'LIVE')}</span>`
-        : `<span class="pill-offline">${escapeHtml(ui.t.liveInactive || 'OFFLINE')}</span>`;
-      const actionText = isActive
-        ? `${escapeHtml(ui.t.openStream || 'Buka Siaran')} &rarr;`
-        : `${escapeHtml(ui.t.streamOffline || 'Siaran tidak aktif')}`;
+function channelsMarkup() {
+  const streams = ui.data.streams || {};
+  return CHANNELS_CONFIG.map(ch => {
+    const url = (streams[ch.key] || '').trim();
+    const isActive = Boolean(url && url.length > 5);
+    const tag = isActive ? 'a' : 'div';
+    const hrefAttr = isActive ? `href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"` : 'aria-disabled="true"';
+    const statusPill = isActive
+      ? `<span class="pill-live"><i></i>${escapeHtml(ui.t.liveActive || 'LIVE')}</span>`
+      : `<span class="pill-offline">${escapeHtml(ui.t.liveInactive || 'OFFLINE')}</span>`;
+    const actionText = isActive
+      ? `${escapeHtml(ui.t.openStream || 'Buka Siaran')} &rarr;`
+      : `${escapeHtml(ui.t.streamOffline || 'Siaran tidak aktif')}`;
 
-      return `
-        <${tag} class="channel-card ${isActive ? 'active' : 'inactive'}" ${hrefAttr}>
-          <div class="channel-head">
-            <div class="channel-brand">
-              <span class="channel-icon" style="color:${ch.color}">${ch.svg}</span>
-              <span>${escapeHtml(ch.name)}</span>
-            </div>
-            ${statusPill}
+    return `
+      <${tag} class="channel-card ${isActive ? 'active' : 'inactive'}" ${hrefAttr}>
+        <div class="channel-head">
+          <div class="channel-brand">
+            <span class="channel-icon" style="color:${ch.color}">${ch.svg}</span>
+            <span>${escapeHtml(ch.name)}</span>
           </div>
-          <div class="channel-action">
-            <span>${actionText}</span>
-          </div>
-        </${tag}>
-      `;
-    }).join('');
-  }
+          ${statusPill}
+        </div>
+        <div class="channel-action">
+          <span>${actionText}</span>
+        </div>
+      </${tag}>
+    `;
+  }).join('');
+}
+
+function renderStream() {
+  const html = channelsMarkup();
+  const container = $('#channels-grid');
+  if (container) container.innerHTML = html;
+  const homeContainer = $('#home-channels-grid');
+  if (homeContainer) homeContainer.innerHTML = html;
 
   const heroBtn = $('#hero-stream-btn');
   if (heroBtn) {
@@ -421,11 +450,18 @@ function boot() {
   const select = $('#lang-select');
   select.innerHTML = LANGUAGES.map(item => `<option value="${item.code}">${item.label}</option>`).join('');
   select.value = ui.lang;
-  select.addEventListener('change', () => {
-    ui.lang = select.value;
+
+  const setLang = (code) => {
+    ui.lang = code;
+    select.value = code;
     localStorage.setItem('uajm_lang', ui.lang);
     applyLanguage();
     renderAll();
+  };
+
+  select.addEventListener('change', () => setLang(select.value));
+  document.querySelectorAll('[data-quick-lang]').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.dataset.quickLang));
   });
 
   $('#theme-btn').addEventListener('click', () => {
