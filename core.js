@@ -36,6 +36,7 @@ export function defaultConfig() {
   return {
     datesBanner: '10 – 12 NOV 2026',
     teamCount: 58,
+    autoFitTeams: true,
     thirdPlace: true,
     customStructure: false,
     days: DEFAULT_DAYS.map(d => ({ ...d })),
@@ -54,8 +55,9 @@ export function normalizeConfig(raw) {
   }
   if (raw.teamCount !== undefined) {
     const n = Number(raw.teamCount);
-    if (Number.isFinite(n) && n >= 4 && n <= 64) base.teamCount = Math.round(n);
+    if (Number.isFinite(n) && n >= 2 && n <= 128) base.teamCount = Math.round(n);
   }
+  if (typeof raw.autoFitTeams === 'boolean') base.autoFitTeams = raw.autoFitTeams;
   if (typeof raw.thirdPlace === 'boolean') base.thirdPlace = raw.thirdPlace;
   if (typeof raw.customStructure === 'boolean') base.customStructure = raw.customStructure;
 
@@ -151,9 +153,31 @@ export function padTeamId(seed) {
   return `T${String(seed).padStart(2, '0')}`;
 }
 
+// Menghitung jumlah tim efektif berdasarkan konfigurasi & daftar tim yang diisi
+export function effectiveTeamCount(state) {
+  const cfg = normalizeConfig(state?.config);
+  const teamsObj = state?.teams || {};
+  const filledKeys = Object.keys(teamsObj).filter(k => typeof teamsObj[k] === 'string' && teamsObj[k].trim().length > 0);
+  if (cfg.autoFitTeams && filledKeys.length >= 2) {
+    // Cari seed tertinggi yang terisi atau jumlah tim terisi
+    let maxSeed = filledKeys.length;
+    for (const k of filledKeys) {
+      const m = /^T(\d+)$/.exec(k);
+      if (m) maxSeed = Math.max(maxSeed, Number(m[1]));
+    }
+    // Jika tim diisi berurutan atau tempel massal, gunakan jumlah tim yang terisi jika semua <= maxSeed
+    const count = filledKeys.length;
+    if (count >= 2 && count <= 128 && maxSeed === count) {
+      return count;
+    }
+  }
+  return Math.max(2, Math.min(128, cfg.teamCount || 58));
+}
+
 function roundNameForMatches(matchCount, isPreliminary) {
   if (isPreliminary) return 'Round 1';
-  if (matchCount === 32) return 'Round 1';
+  if (matchCount === 64) return 'Round of 128';
+  if (matchCount === 32) return 'Round of 64';
   if (matchCount === 16) return 'Round of 32';
   if (matchCount === 8) return 'Round of 16';
   if (matchCount === 4) return 'Quarterfinals';
@@ -162,9 +186,39 @@ function roundNameForMatches(matchCount, isPreliminary) {
   return `Round (${matchCount * 2})`;
 }
 
-// Generator Single Elimination dinamis untuk jumlah tim 4 s/d 64
+// Urutan seeding pohon biner standar Challonge untuk K slot (K pangkat 2)
+export function challongeSeedOrder(slotCount) {
+  let order = [1, 2];
+  while (order.length < slotCount) {
+    const sum = order.length * 2 + 1;
+    const next = [];
+    for (const s of order) {
+      next.push(s, sum - s);
+    }
+    order = next;
+  }
+  return order;
+}
+
+// Generator Single Elimination standar Challonge untuk jumlah tim 2 s/d 128
 export function generateBracketMatches(teamCount, thirdPlace = true) {
-  const n = Math.max(4, Math.min(64, Math.round(Number(teamCount) || 58)));
+  const n = Math.max(2, Math.min(128, Math.round(Number(teamCount) || 58)));
+  if (n === 2) {
+    return [{
+      id: 'M1',
+      round: 'Grand Final',
+      day: 3,
+      date: '12 Nov 2026',
+      time: '19.45',
+      kloter: null,
+      stream: true,
+      format: 'BO5',
+      s0: { t: 'T01' },
+      s1: { t: 'T02' },
+      next: null
+    }];
+  }
+
   const p = Math.pow(2, Math.ceil(Math.log2(n)));
   const byes = p - n;
   const prelimMatchesCount = n - (p / 2);
@@ -173,8 +227,11 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
   const nextId = () => `M${matchCounter++}`;
   const allMatches = [];
 
-  if (prelimMatchesCount > 0) {
-    const firstFullCount = p / 4;
+  if (prelimMatchesCount > 0 && byes > 0) {
+    const firstFullCount = p / 4; // jumlah match di babak penuh pertama (total 2 * firstFullCount slot)
+    const slotCount = firstFullCount * 2;
+    const seedRanks = challongeSeedOrder(slotCount);
+
     const prelimMatches = [];
     for (let i = 0; i < prelimMatchesCount; i++) {
       const kloter = prelimMatchesCount > 8 ? (i < Math.ceil(prelimMatchesCount / 2) ? 1 : 2) : 1;
@@ -199,11 +256,12 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
       fullMatches.push({
         id: nextId(),
         round: fullRoundName,
-        day: 1,
-        date: '10 Nov 2026',
-        time: kloter === 2 ? '19.40' : '19.25',
+        day: fullRoundName === 'Semifinals' ? 2 : (fullRoundName === 'Grand Final' ? 3 : 1),
+        date: fullRoundName === 'Semifinals' ? '11 Nov 2026' : (fullRoundName === 'Grand Final' ? '12 Nov 2026' : '10 Nov 2026'),
+        time: fullRoundName === 'Grand Final' ? '19.45' : (fullRoundName === 'Semifinals' ? (i === 0 ? '18.30' : '19.45') : (kloter === 2 ? '19.40' : '19.25')),
         kloter,
-        format: 'BO1',
+        stream: fullRoundName === 'Semifinals' || fullRoundName === 'Grand Final',
+        format: fullRoundName === 'Grand Final' ? 'BO5' : (fullRoundName === 'Semifinals' ? 'BO3' : 'BO1'),
         s0: null,
         s1: null,
         bye: false,
@@ -211,46 +269,38 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
       });
     }
 
-    // Sebar BYE secara merata pada slot 0 (dan slot 1 jika byes > firstFullCount)
-    const byeSlots = new Set();
-    const firstPass = Math.min(byes, firstFullCount);
-    for (let k = 0; k < firstPass; k++) {
-      const idx = Math.floor((k * firstFullCount) / firstPass);
-      let target = idx;
-      while (byeSlots.has(`${target}:0`)) target = (target + 1) % firstFullCount;
-      byeSlots.add(`${target}:0`);
-    }
-    const secondPass = byes - firstPass;
-    for (let k = 0; k < secondPass; k++) {
-      const idx = Math.floor((k * firstFullCount) / secondPass);
-      let target = idx;
-      while (byeSlots.has(`${target}:1`)) target = (target + 1) % firstFullCount;
-      byeSlots.add(`${target}:1`);
-    }
-
-    let seedCursor = 1;
+    // Slot dengan seedRank <= byes mendapat BYE langsung di fullMatches sesuai urutan pohon Challonge
     let prelimCursor = 0;
     for (let i = 0; i < firstFullCount; i++) {
-      for (const slot of [0, 1]) {
-        if (byeSlots.has(`${i}:${slot}`)) {
-          const tId = padTeamId(seedCursor++);
-          if (slot === 0) fullMatches[i].s0 = { t: tId };
-          else fullMatches[i].s1 = { t: tId };
-          fullMatches[i].bye = true;
-        } else {
-          const pm = prelimMatches[prelimCursor++];
-          pm.next = { m: fullMatches[i].id, slot };
-          if (slot === 0) fullMatches[i].s0 = { w: pm.id };
-          else fullMatches[i].s1 = { w: pm.id };
-        }
+      const r0 = seedRanks[2 * i];
+      const r1 = seedRanks[2 * i + 1];
+      const isBye0 = r0 <= byes;
+      const isBye1 = r1 <= byes;
+
+      if (isBye0) {
+        fullMatches[i].s0 = { t: padTeamId(r0) };
+        fullMatches[i].bye = true;
+      } else {
+        const pm = prelimMatches[prelimCursor++];
+        pm.s0 = { t: padTeamId(r0) };
+        pm.s1 = { t: padTeamId(p + 1 - r0) };
+        pm.next = { m: fullMatches[i].id, slot: 0 };
+        fullMatches[i].s0 = { w: pm.id };
+      }
+
+      if (isBye1) {
+        fullMatches[i].s1 = { t: padTeamId(r1) };
+        fullMatches[i].bye = true;
+      } else {
+        const pm = prelimMatches[prelimCursor++];
+        pm.s0 = { t: padTeamId(r1) };
+        pm.s1 = { t: padTeamId(p + 1 - r1) };
+        pm.next = { m: fullMatches[i].id, slot: 1 };
+        fullMatches[i].s1 = { w: pm.id };
       }
     }
 
-    for (const pm of prelimMatches) {
-      pm.s0 = { t: padTeamId(seedCursor++) };
-      pm.s1 = { t: padTeamId(seedCursor++) };
-      allMatches.push(pm);
-    }
+    allMatches.push(...prelimMatches);
     allMatches.push(...fullMatches);
 
     let prevRoundMatches = fullMatches;
@@ -279,7 +329,7 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
         });
       }
 
-      if (count === 1 && thirdPlace && prevRoundMatches.length === 2) {
+      if (count === 1 && thirdPlace && n >= 4 && prevRoundMatches.length === 2) {
         const gf = currentRound[0];
         const thirdId = gf.id;
         const realGfId = nextId();
@@ -307,9 +357,9 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
       prevRoundMatches = currentRound;
     }
   } else {
-    // Jumlah tim tepat pangkat 2 (4, 8, 16, 32, 64) - tanpa BYE
+    // Jumlah tim tepat pangkat 2 (4, 8, 16, 32, 64, 128) - tanpa BYE, urutan pohon Challonge
     let count = p / 2;
-    let seedCursor = 1;
+    const seedOrder = challongeSeedOrder(p);
     let prevRoundMatches = [];
     while (count >= 1) {
       const rName = roundNameForMatches(count, false);
@@ -322,13 +372,13 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
             id: mId,
             round: rName,
             day: rName === 'Semifinals' ? 2 : (rName === 'Grand Final' ? 3 : 1),
-            date: '10 Nov 2026',
-            time: kloter === 2 ? '18.45' : '18.30',
+            date: rName === 'Semifinals' ? '11 Nov 2026' : (rName === 'Grand Final' ? '12 Nov 2026' : '10 Nov 2026'),
+            time: rName === 'Grand Final' ? '19.45' : (rName === 'Semifinals' ? (i === 0 ? '18.30' : '19.45') : (kloter === 2 ? '18.45' : '18.30')),
             kloter,
             stream: rName === 'Semifinals' || rName === 'Grand Final',
             format: rName === 'Grand Final' ? 'BO5' : (rName === 'Semifinals' ? 'BO3' : 'BO1'),
-            s0: { t: padTeamId(seedCursor++) },
-            s1: { t: padTeamId(seedCursor++) },
+            s0: { t: padTeamId(seedOrder[2 * i]) },
+            s1: { t: padTeamId(seedOrder[2 * i + 1]) },
             next: null
           });
         } else {
@@ -352,7 +402,7 @@ export function generateBracketMatches(teamCount, thirdPlace = true) {
         }
       }
 
-      if (count === 1 && thirdPlace && prevRoundMatches.length === 2) {
+      if (count === 1 && thirdPlace && n >= 4 && prevRoundMatches.length === 2) {
         const gf = currentRound[0];
         const thirdId = gf.id;
         const realGfId = nextId();
@@ -398,8 +448,9 @@ function scheduleKeyForMatch(match, semiIndex) {
 
 export function getActiveMatches(state) {
   const cfg = normalizeConfig(state?.config);
+  const activeCount = effectiveTeamCount(state);
   let base;
-  if (cfg.teamCount === 58 && !cfg.customStructure) {
+  if (activeCount === 58 && !cfg.customStructure) {
     base = BRACKET_MATCHES
       .filter(m => cfg.thirdPlace || m.round !== '3rd Place Match')
       .map(m => ({
@@ -410,7 +461,7 @@ export function getActiveMatches(state) {
         nextLoser: (!cfg.thirdPlace && m.nextLoser) ? null : (m.nextLoser ? { ...m.nextLoser } : undefined)
       }));
   } else {
-    base = generateBracketMatches(cfg.teamCount, cfg.thirdPlace);
+    base = generateBracketMatches(activeCount, cfg.thirdPlace);
   }
 
   let semiCounter = 0;
@@ -451,15 +502,16 @@ export function getActiveMatches(state) {
 }
 
 export function getActiveTeams(state) {
-  const cfg = normalizeConfig(state?.config);
+  const activeCount = effectiveTeamCount(state);
   const matches = getActiveMatches(state);
-  const hasRound1 = matches.some(m => m.round === 'Round 1');
+  const firstRoundName = matches[0]?.round || 'Round 1';
+  const hasPrelimRound = matches.length > 1 && matches.some(m => m.round !== firstRoundName && (m.s0?.t || m.s1?.t));
   const entryMap = new Map();
 
   for (const match of matches) {
     [match.s0, match.s1].forEach((slotDef, idx) => {
       if (slotDef && slotDef.t && !entryMap.has(slotDef.t)) {
-        const isBye = hasRound1 && match.round !== 'Round 1';
+        const isBye = hasPrelimRound && match.round !== firstRoundName;
         entryMap.set(slotDef.t, {
           entryMatch: match.id,
           slot: idx,
@@ -475,7 +527,7 @@ export function getActiveTeams(state) {
   }
 
   const list = [];
-  for (let seed = 1; seed <= cfg.teamCount; seed++) {
+  for (let seed = 1; seed <= activeCount; seed++) {
     const id = padTeamId(seed);
     const fallback = TEAMS_DATA[seed - 1] || {};
     const entry = entryMap.get(id) || {
@@ -575,7 +627,6 @@ export function downstreamMatches(matchId, state) {
         queue.push(link.m);
       }
     }
-    // Cek juga apakah ada pertandingan lain yang mereferensikan currentId via s0/s1 override
     for (const m of activeMatches) {
       const refs = [m.s0?.w, m.s0?.l, m.s1?.w, m.s1?.l];
       if (refs.includes(currentId) && !out.includes(m.id)) {

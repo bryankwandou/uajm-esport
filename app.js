@@ -234,17 +234,25 @@ function computeLayout(matches) {
   const r1 = mainRounds[1] ? byRound(mainRounds[1]) : [];
   const hasPartialPrelim = mainRounds.length >= 2 && r0.length < 2 * r1.length;
 
-  let baseRows = 16;
   let slotHeight = SLOT_HEIGHT;
 
   if (hasPartialPrelim) {
-    baseRows = Math.max(r1.length, 4);
+    const r1ById = new Map(r1.map(m => [m.id, m]));
+    const hasDoubleFeeder = r1.some(m => m.s0?.w && m.s1?.w);
+    if (r1.length <= 2) slotHeight = 148;
+    else if (r1.length <= 4) slotHeight = 136;
+    else if (r1.length <= 8) slotHeight = 128;
+    else if (r1.length <= 16) slotHeight = hasDoubleFeeder ? 128 : 108;
+    else slotHeight = hasDoubleFeeder ? 124 : 92;
+
     r1.forEach((match, index) => {
       positions.set(match.id, { col: 1, cy: TOP_OFFSET + index * slotHeight + slotHeight / 2 });
     });
     r0.forEach((match, index) => {
       const target = match.next ? positions.get(match.next.m) : null;
-      const offset = (CARD_HEIGHT + 12) / 2;
+      const targetMatch = match.next ? r1ById.get(match.next.m) : null;
+      const bothFeeders = Boolean(targetMatch && targetMatch.s0?.w && targetMatch.s1?.w);
+      const offset = bothFeeders ? (CARD_HEIGHT + 12) / 2 : 13;
       const cy = target ? (target.cy + (match.next.slot === 0 ? -offset : offset)) : (TOP_OFFSET + index * slotHeight + slotHeight / 2);
       positions.set(match.id, { col: 0, cy });
     });
@@ -259,8 +267,11 @@ function computeLayout(matches) {
       });
     }
   } else {
-    baseRows = Math.max(r0.length, 2);
-    if (baseRows > 16) slotHeight = 88;
+    if (r0.length <= 2) slotHeight = 148;
+    else if (r0.length <= 8) slotHeight = 128;
+    else if (r0.length <= 16) slotHeight = 104;
+    else slotHeight = 84;
+
     r0.forEach((match, index) => {
       positions.set(match.id, { col: 0, cy: TOP_OFFSET + index * slotHeight + slotHeight / 2 });
     });
@@ -279,12 +290,17 @@ function computeLayout(matches) {
   const gfMatch = matches.find(m => m.round === 'Grand Final');
   const thirdMatch = matches.find(m => m.round === '3rd Place Match');
   if (thirdMatch) {
-    const gfPos = gfMatch ? positions.get(gfMatch.id) : { col: Math.max(0, mainRounds.length - 1), cy: 300 };
-    positions.set(thirdMatch.id, { col: gfPos.col, cy: gfPos.cy + 150 });
+    const gfPos = gfMatch ? positions.get(gfMatch.id) : { col: Math.max(0, mainRounds.length - 1), cy: 200 };
+    positions.set(thirdMatch.id, { col: gfPos.col, cy: gfPos.cy + 120 });
+  }
+
+  let maxCy = 240;
+  for (const pos of positions.values()) {
+    if (pos.cy > maxCy) maxCy = pos.cy;
   }
 
   const labels = mainRounds.map(r => (r === 'Grand Final' ? 'Finals' : r));
-  const totalHeight = Math.max(TOP_OFFSET + baseRows * slotHeight + 60, 520);
+  const totalHeight = Math.max(maxCy + 84, 360);
   return { positions, labels, totalHeight };
 }
 
@@ -308,7 +324,12 @@ function renderBracket() {
   const height = totalHeight;
 
   const bracketSub = $('#bracket-sub');
-  if (bracketSub) bracketSub.textContent = `Single Elimination · ${ui.teamsList.length} (${ui.cfg.datesBanner})`;
+  if (bracketSub) {
+    const n = Math.max(2, ui.teamsList.length);
+    const k = Math.pow(2, Math.ceil(Math.log2(n)));
+    const byes = k - n;
+    bracketSub.textContent = `Single Elimination · ${n} Tim · Bagan ${k} Slot${byes > 0 ? ` (${byes} BYE)` : ''} · ${matches.length} Laga · ${ui.cfg.datesBanner}`;
+  }
 
   const jumps = $('#round-jumps');
   if (jumps) {

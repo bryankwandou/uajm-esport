@@ -54,7 +54,9 @@
     .match-date-row + .match-date-row { margin-top: 6px; }
     .preset-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
     .preset-pill { border: 1px solid var(--outline-strong); background: var(--surface-alt); border-radius: var(--radius-sm); padding: 4px 10px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
-    .preset-pill:hover { border-color: var(--primary); color: var(--primary); }
+    .preset-pill:hover, .preset-pill.active { border-color: var(--primary); color: var(--primary); background: var(--surface); font-weight: 700; }
+    .team-del { width: 24px; height: 24px; border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; font-family: var(--font-mono); font-size: 14px; line-height: 1; display: grid; place-items: center; flex-shrink: 0; }
+    .team-del:hover { border-color: var(--error); color: var(--error); }
     .chk-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; user-select: none; }
     .chk-inline input { width: 16px; height: 16px; accent-color: var(--primary); }
 
@@ -115,17 +117,55 @@
       <!-- Tab 1: Teams -->
       <div id="panel-teams">
         <div class="admin-bar">
-          <p class="view-sub">Nama tim default kosong. Isi sesuai seed, lalu klik Simpan.</p>
+          <div>
+            <h2 class="view-title" style="font-size:26px">Daftar Tim Peserta &amp; Ukuran Bracket (Challonge)</h2>
+            <p class="view-sub" id="teams-bracket-summary">Nama tim default kosong. Ukuran bracket otomatis menyesuaikan jumlah tim peserta (2 – 128 tim).</p>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" id="bulk-toggle" type="button">Tempel Massal</button>
+            <button class="btn btn-ghost btn-sm" id="shuffle-teams-quick" type="button">Acak Seed</button>
             <button class="btn btn-ghost btn-sm" id="clear-teams" type="button">Kosongkan Semua</button>
-            <button class="btn btn-primary btn-sm" id="save-teams" type="button">Simpan Nama Tim</button>
+            <button class="btn btn-primary btn-sm" id="save-teams" type="button">Simpan Nama Tim &amp; Bracket</button>
           </div>
         </div>
+
+        <div class="admin-section" style="padding:16px;margin-bottom:16px">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+                <span>Jumlah Slot Tim (2–128):</span>
+                <input class="input" id="team-count-quick" type="number" min="2" max="128" value="58" style="width:88px;min-height:36px;padding:0 10px">
+              </label>
+              <button class="btn btn-ghost btn-sm" id="team-dec" type="button" title="Kurangi 1 slot tim">-1 Tim</button>
+              <button class="btn btn-ghost btn-sm" id="team-inc" type="button" title="Tambah 1 slot tim">+1 Tim</button>
+              <button class="btn btn-ghost btn-sm" id="fit-filled-teams" type="button" title="Sesuaikan ukuran bracket tepat ke jumlah tim yang sudah diisi">Sesuaikan ke Tim Terisi</button>
+            </div>
+            <label class="chk-inline">
+              <input type="checkbox" id="cfg-auto-fit" checked>
+              <span>Otomatis sesuaikan ukuran bracket ke jumlah tim terisi saat Simpan (Mode Challonge)</span>
+            </label>
+          </div>
+          <div class="preset-pills" style="margin-top:10px">
+            <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);align-self:center;margin-right:4px"> Ukuran Cepat:</span>
+            <button type="button" class="preset-pill" data-quick-preset="4">4 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="6">6 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="8">8 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="10">10 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="12">12 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="16">16 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="20">20 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="24">24 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="32">32 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="48">48 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="58">58 Tim</button>
+            <button type="button" class="preset-pill" data-quick-preset="64">64 Tim</button>
+          </div>
+        </div>
+
         <div id="bulk-box" class="card hidden" style="margin-bottom:16px">
-          <p class="view-sub" style="margin-bottom:8px">Satu nama tim per baris, urut dari Seed 1 sampai Seed terakhir.</p>
+          <p class="view-sub" style="margin-bottom:8px">Satu nama tim per baris, urut dari Seed 1 sampai Seed terakhir. Jika Mode Challonge aktif, ukuran bracket otomatis mengikuti jumlah baris tim yang ditempel.</p>
           <textarea class="input" id="bulk-text"></textarea>
-          <button class="btn btn-ghost btn-sm" id="bulk-apply" type="button" style="margin-top:8px">Terapkan ke Form</button>
+          <button class="btn btn-ghost btn-sm" id="bulk-apply" type="button" style="margin-top:8px">Terapkan ke Form &amp; Sesuaikan Bracket</button>
         </div>
         <div class="team-edit" id="team-edit"></div>
       </div>
@@ -204,33 +244,38 @@
 
         <div class="admin-section">
           <h2>1. Konfigurasi Struktur Utama Bracket</h2>
-          <p class="view-sub" style="margin-bottom:16px">Ubah jumlah tim peserta (4 s/d 64 tim), sistem penempatan BYE, dan opsi pertandingan perebutan Juara 3 (3rd Place Match).</p>
+          <p class="view-sub" id="structure-summary" style="margin-bottom:16px">Ubah jumlah tim peserta (2 s/d 128 tim), sistem penempatan BYE sesuai standar Challonge, dan opsi pertandingan perebutan Juara 3 (3rd Place Match).</p>
           <div class="days-grid">
             <div class="day-edit-card">
               <h3>Jumlah Slot Tim Peserta</h3>
               <label class="field" style="margin-bottom:4px">
-                <span>Jumlah Tim (4 – 64 Tim)</span>
-                <input class="input" id="cfg-team-count" type="number" min="4" max="64" value="58">
+                <span>Jumlah Tim (2 – 128 Tim)</span>
+                <input class="input" id="cfg-team-count" type="number" min="2" max="128" value="58">
               </label>
               <div class="preset-pills">
+                <button type="button" class="preset-pill" data-team-preset="4">4 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="6">6 Tim</button>
                 <button type="button" class="preset-pill" data-team-preset="8">8 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="12">12 Tim</button>
                 <button type="button" class="preset-pill" data-team-preset="16">16 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="24">24 Tim</button>
                 <button type="button" class="preset-pill" data-team-preset="32">32 Tim</button>
+                <button type="button" class="preset-pill" data-team-preset="48">48 Tim</button>
                 <button type="button" class="preset-pill" data-team-preset="58">58 Tim (Default)</button>
                 <button type="button" class="preset-pill" data-team-preset="64">64 Tim</button>
               </div>
             </div>
 
             <div class="day-edit-card">
-              <h3>Mode Struktur &amp; BYE</h3>
+              <h3>Mode Struktur &amp; BYE Challonge</h3>
               <label class="field" style="margin-bottom:0">
                 <span>Tipe Susunan Bagan</span>
                 <select class="select" id="cfg-structure-mode">
                   <option value="challonge58">Standar Challonge 58 Tim (6 BYE Resmi)</option>
-                  <option value="auto">Otomatis Seimbang (Single Elimination)</option>
+                  <option value="auto">Otomatis Seimbang Challonge (2–128 Tim)</option>
                 </select>
               </label>
-              <small style="color:var(--muted);font-size:12px">Jika jumlah tim bukan 58, sistem otomatis menyusun pohon Single Elimination beserta distribusi BYE yang merata.</small>
+              <small style="color:var(--muted);font-size:12px">Menyusun pohon Single Elimination fleksibel (pangkat 2 terdekat) beserta distribusi BYE unggulan teratas sesuai algoritma Challonge.</small>
             </div>
 
             <div class="day-edit-card">

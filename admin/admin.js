@@ -112,33 +112,246 @@ async function remoteWrite(path, method, body) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
 
-/* ---------- Tab 1: Team names ---------- */
+/* ---------- Tab 1: Team names & Challonge Bracket Sizing ---------- */
+function describeChallongeTopology(teamCount, thirdPlace = true) {
+  const n = Math.max(2, Math.min(128, Math.round(Number(teamCount) || 58)));
+  const k = Math.pow(2, Math.ceil(Math.log2(n)));
+  const byes = k - n;
+  const playInCount = n - (k / 2);
+  const totalMatches = (n - 1) + (thirdPlace && n >= 4 ? 1 : 0);
+  const byeInfo = byes > 0 ? `${byes} BYE (Seed 1${byes > 1 ? `–${byes}` : ''})` : '0 BYE (Bagan Penuh)';
+  const playInInfo = playInCount > 0 ? `${playInCount} laga Round 1` : 'Langsung Babak Utama';
+  return {
+    n, k, byes, playInCount, totalMatches,
+    summary: `Ukuran Bracket: ${n} Tim · Pohon Bagan: ${k} Slot · ${byeInfo} · ${playInInfo} · Total: ${totalMatches} Pertandingan`
+  };
+}
+
+function getSlotTeamsForConfig(state, cfg) {
+  return getActiveTeams({
+    ...state,
+    config: { ...cfg, autoFitTeams: false }
+  });
+}
+
 function renderTeams() {
-  const teams = getActiveTeams(admin.data);
+  const cfg = normalizeConfig(admin.data.config);
+  const teams = getSlotTeamsForConfig(admin.data, cfg);
+  const filledCount = teams.filter(t => Boolean(teamName(admin.data, t.id))).length;
+  const topo = describeChallongeTopology(cfg.teamCount, cfg.thirdPlace);
+
+  const summaryEl = $('#teams-bracket-summary');
+  if (summaryEl) {
+    summaryEl.textContent = `${topo.summary} · Tim Terisi: ${filledCount}/${cfg.teamCount}`;
+  }
+  const quickCountEl = $('#team-count-quick');
+  if (quickCountEl) quickCountEl.value = cfg.teamCount;
+  const autoFitEl = $('#cfg-auto-fit');
+  if (autoFitEl) autoFitEl.checked = cfg.autoFitTeams !== false;
+
+  document.querySelectorAll('[data-quick-preset]').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.quickPreset) === cfg.teamCount);
+  });
+
   $('#team-edit').innerHTML = teams.map(team => `<label>
     <span class="seed-lg">${team.seed}</span>
-    <input data-team="${team.id}" maxlength="40" value="${escapeHtml(teamName(admin.data, team.id))}" aria-label="Nama tim seed ${team.seed}">
+    <input data-team="${team.id}" data-seed="${team.seed}" maxlength="40" placeholder="Nama tim Seed ${team.seed}..." value="${escapeHtml(teamName(admin.data, team.id))}" aria-label="Nama tim seed ${team.seed}">
     <small>${escapeHtml(team.entryMatch)}${team.hasBye ? ' BYE' : ''}</small>
+    ${cfg.teamCount > 2 ? `<button type="button" class="team-del" data-remove-seed="${team.seed}" title="Hapus slot Seed ${team.seed} dan sesuaikan bracket">&times;</button>` : ''}
   </label>`).join('');
 }
 
 function collectTeamNames() {
   const names = {};
-  document.querySelectorAll('#team-edit input').forEach(input => {
+  document.querySelectorAll('#team-edit input[data-team]').forEach(input => {
     const value = input.value.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40);
     if (value) names[input.dataset.team] = value;
   });
   return names;
 }
 
+function collectOrderedInputValues() {
+  const inputs = [...document.querySelectorAll('#team-edit input[data-team]')];
+  if (!inputs.length) {
+    const cfg = normalizeConfig(admin.data.config);
+    const list = [];
+    for (let s = 1; s <= cfg.teamCount; s++) {
+      list.push(teamName(admin.data, padTeamId(s)));
+    }
+    return list;
+  }
+  return inputs.map(input => input.value.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40));
+}
+
+async function resizeBracketSlots(targetCount, { keepAutoFit = null, toastPrefix = '' } = {}) {
+  const cfg = normalizeConfig(admin.data.config);
+  const newCount = Math.max(2, Math.min(128, Math.round(Number(targetCount) || cfg.teamCount)));
+  const currentValues = collectOrderedInputValues();
+  const nextTeams = {};
+  for (let i = 0; i < newCount; i++) {
+    const val = (currentValues[i] || '').trim();
+    if (val) nextTeams[padTeamId(i + 1)] = val;
+  }
+  const filledCount = Object.keys(nextTeams).length;
+  cfg.teamCount = newCount;
+  cfg.customStructure = newCount !== 58;
+  cfg.matchOverrides = {};
+  if (keepAutoFit !== null) {
+    cfg.autoFitTeams = Boolean(keepAutoFit);
+  } else if (filledCount >= 2 && filledCount !== newCount) {
+    // Jika admin memilih jumlah slot spesifik yang berbeda dari jumlah tim terisi saat ini, kunci ke jumlah slot pilihan admin
+    cfg.autoFitTeams = false;
+  }
+
+  admin.data.teams = nextTeams;
+  admin.data.config = cfg;
+  writeCache(admin.data);
+  renderAllPanels();
+  try {
+    await Promise.all([
+      remoteWrite('config', 'PUT', cfg),
+      remoteWrite('teams', 'PUT', nextTeams)
+    ]);
+    setSync(true);
+    const topo = describeChallongeTopology(newCount, cfg.thirdPlace);
+    showToast(`${toastPrefix ? `${toastPrefix} · ` : ''}Bracket disesuaikan ke ${newCount} tim (${topo.byes} BYE, ${topo.totalMatches} laga)`);
+  } catch {
+    setSync(false);
+    showToast(`Ukuran bracket diubah ke ${newCount} tim (tersimpan lokal)`);
+  }
+}
+
+async function removeTeamSlot(seedIndex) {
+  const cfg = normalizeConfig(admin.data.config);
+  if (cfg.teamCount <= 2) {
+    showToast('Minimal harus ada 2 tim di dalam bracket');
+    return;
+  }
+  const values = collectOrderedInputValues();
+  const idx = Number(seedIndex) - 1;
+  if (idx < 0 || idx >= values.length) return;
+  values.splice(idx, 1);
+  const newCount = Math.max(2, values.length);
+  const nextTeams = {};
+  values.forEach((val, i) => {
+    if (val) nextTeams[padTeamId(i + 1)] = val;
+  });
+  cfg.teamCount = newCount;
+  cfg.customStructure = newCount !== 58;
+  cfg.matchOverrides = {};
+  admin.data.teams = nextTeams;
+  admin.data.config = cfg;
+  writeCache(admin.data);
+  renderAllPanels();
+  try {
+    await Promise.all([
+      remoteWrite('config', 'PUT', cfg),
+      remoteWrite('teams', 'PUT', nextTeams)
+    ]);
+    setSync(true);
+    showToast(`Seed ${seedIndex} dihapus · Bracket kini ${newCount} tim`);
+  } catch {
+    setSync(false);
+  }
+}
+
+async function fitBracketToFilledTeams() {
+  const values = collectOrderedInputValues().filter(Boolean);
+  if (values.length < 2) {
+    showToast('Isi minimal 2 nama tim terlebih dahulu untuk menyesuaikan ukuran bracket');
+    return;
+  }
+  const newCount = Math.min(128, values.length);
+  const nextTeams = {};
+  values.slice(0, newCount).forEach((val, idx) => {
+    nextTeams[padTeamId(idx + 1)] = val;
+  });
+  const cfg = normalizeConfig(admin.data.config);
+  cfg.teamCount = newCount;
+  cfg.customStructure = newCount !== 58;
+  cfg.autoFitTeams = true;
+  cfg.matchOverrides = {};
+  admin.data.teams = nextTeams;
+  admin.data.config = cfg;
+  writeCache(admin.data);
+  renderAllPanels();
+  try {
+    await Promise.all([
+      remoteWrite('config', 'PUT', cfg),
+      remoteWrite('teams', 'PUT', nextTeams)
+    ]);
+    setSync(true);
+    showToast(`Bracket otomatis disesuaikan ke ${newCount} tim terisi`);
+  } catch {
+    setSync(false);
+  }
+}
+
+async function shuffleTeamNamesQuick() {
+  const values = collectOrderedInputValues();
+  const filled = values.filter(Boolean);
+  if (filled.length < 2) {
+    showToast('Minimal 2 nama tim harus terisi untuk mengacak urutan seed');
+    return;
+  }
+  for (let i = filled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [filled[i], filled[j]] = [filled[j], filled[i]];
+  }
+  const nextTeams = {};
+  filled.forEach((val, idx) => {
+    nextTeams[padTeamId(idx + 1)] = val;
+  });
+  admin.data.teams = nextTeams;
+  writeCache(admin.data);
+  renderAllPanels();
+  try {
+    await remoteWrite('teams', 'PUT', nextTeams);
+    setSync(true);
+    showToast(`Urutan seed ${filled.length} tim berhasil diacak`);
+  } catch {
+    setSync(false);
+  }
+}
+
 async function saveTeams() {
-  const names = collectTeamNames();
+  const cfg = normalizeConfig(admin.data.config);
+  const autoFit = Boolean($('#cfg-auto-fit')?.checked);
+  const quickCountRaw = Number($('#team-count-quick')?.value || cfg.teamCount);
+  const ordered = collectOrderedInputValues();
+  const filled = ordered.filter(Boolean);
+
+  let targetCount = Math.max(2, Math.min(128, Math.round(quickCountRaw)));
+  let names = {};
+
+  if (autoFit && filled.length >= 2) {
+    targetCount = Math.min(128, filled.length);
+    filled.slice(0, targetCount).forEach((val, idx) => {
+      names[padTeamId(idx + 1)] = val;
+    });
+  } else {
+    names = collectTeamNames();
+  }
+
+  const sizeChanged = targetCount !== cfg.teamCount;
+  cfg.teamCount = targetCount;
+  cfg.customStructure = targetCount !== 58;
+  cfg.autoFitTeams = autoFit;
+  if (sizeChanged) {
+    cfg.matchOverrides = {};
+  }
+
   admin.data.teams = names;
+  admin.data.config = cfg;
   writeCache(admin.data);
   try {
-    await remoteWrite('teams', 'PUT', names);
+    await Promise.all([
+      remoteWrite('teams', 'PUT', names),
+      remoteWrite('config', 'PUT', cfg)
+    ]);
     setSync(true);
-    showToast(`${Object.keys(names).length} nama tim tersimpan`);
+    const topo = describeChallongeTopology(cfg.teamCount, cfg.thirdPlace);
+    showToast(`${Object.keys(names).length} tim tersimpan · Bracket: ${cfg.teamCount} slot (${topo.byes} BYE, ${topo.totalMatches} laga)`);
   } catch {
     setSync(false);
     showToast('Gagal menyimpan ke database');
@@ -147,9 +360,29 @@ async function saveTeams() {
 }
 
 function applyBulk() {
-  const lines = $('#bulk-text').value.split(/\r?\n/).map(line => line.trim());
-  document.querySelectorAll('#team-edit input').forEach((input, index) => {
-    if (lines[index] !== undefined) input.value = lines[index].slice(0, 40);
+  const rawLines = $('#bulk-text').value.split(/\r?\n/).map(line => line.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40));
+  const nonEmpty = rawLines.filter(Boolean);
+  const cfg = normalizeConfig(admin.data.config);
+  const autoFit = $('#cfg-auto-fit')?.checked !== false;
+
+  if (autoFit && nonEmpty.length >= 2) {
+    const newCount = Math.max(2, Math.min(128, nonEmpty.length));
+    const nextTeams = {};
+    nonEmpty.slice(0, newCount).forEach((val, idx) => {
+      nextTeams[padTeamId(idx + 1)] = val;
+    });
+    cfg.teamCount = newCount;
+    cfg.customStructure = newCount !== 58;
+    cfg.matchOverrides = {};
+    admin.data.teams = nextTeams;
+    admin.data.config = cfg;
+    renderAllPanels();
+    showToast(`Diterapkan ${newCount} tim & ukuran bracket disesuaikan ke ${newCount} slot. Klik Simpan untuk menerbitkan.`);
+    return;
+  }
+
+  document.querySelectorAll('#team-edit input[data-team]').forEach((input, index) => {
+    if (rawLines[index] !== undefined) input.value = rawLines[index];
   });
   showToast('Diterapkan ke form. Tekan Simpan untuk menerbitkan.');
 }
@@ -367,6 +600,16 @@ function renderStructurePanel() {
   $('#cfg-structure-mode').value = (cfg.teamCount === 58 && !cfg.customStructure) ? 'challonge58' : 'auto';
   $('#cfg-third-place').value = String(cfg.thirdPlace);
 
+  const topo = describeChallongeTopology(cfg.teamCount, cfg.thirdPlace);
+  const structSummary = $('#structure-summary');
+  if (structSummary) {
+    structSummary.textContent = topo.summary;
+  }
+
+  document.querySelectorAll('[data-team-preset]').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.teamPreset) === cfg.teamCount);
+  });
+
   renderMatchStructureList();
 }
 
@@ -420,7 +663,7 @@ function renderMatchStructureList() {
 
 async function saveStructureConfig() {
   const cfg = normalizeConfig(admin.data.config);
-  const newCount = Math.max(4, Math.min(64, Math.round(Number($('#cfg-team-count').value) || 58)));
+  const newCount = Math.max(2, Math.min(128, Math.round(Number($('#cfg-team-count').value) || 58)));
   const modeVal = $('#cfg-structure-mode').value;
   const newCustom = newCount !== 58 || modeVal === 'auto';
   const newThird = $('#cfg-third-place').value === 'true';
@@ -434,6 +677,10 @@ async function saveStructureConfig() {
   if (structureTopologyChanged) {
     // Jika ukuran bracket berubah, bersihkan override s0/s1 lama agar struktur pohon baru bersih
     cfg.matchOverrides = {};
+    const filledCount = Object.values(admin.data.teams || {}).filter(v => typeof v === 'string' && v.trim()).length;
+    if (filledCount >= 2 && filledCount !== newCount) {
+      cfg.autoFitTeams = false;
+    }
   } else {
     document.querySelectorAll('[data-struct-row]').forEach(row => {
       const mId = row.dataset.structRow;
@@ -459,7 +706,8 @@ async function saveStructureConfig() {
   try {
     await remoteWrite('config', 'PUT', cfg);
     setSync(true);
-    showToast('Struktur pertandingan berhasil disimpan');
+    const topo = describeChallongeTopology(cfg.teamCount, cfg.thirdPlace);
+    showToast(`Struktur disimpan: ${cfg.teamCount} tim (${topo.byes} BYE, ${topo.totalMatches} laga)`);
   } catch {
     setSync(false);
     showToast('Disimpan di lokal (gagal terhubung ke server)');
@@ -636,13 +884,50 @@ function boot() {
     renderAllPanels();
   }));
 
-  // Tab 1: Teams
+  // Tab 1: Teams & Challonge Bracket Size Controls
   $('#save-teams').addEventListener('click', saveTeams);
   $('#bulk-toggle').addEventListener('click', () => $('#bulk-box').classList.toggle('hidden'));
   $('#bulk-apply').addEventListener('click', applyBulk);
   $('#clear-teams').addEventListener('click', () => {
     if (!confirm('Kosongkan semua nama tim di form? Perubahan baru terbit setelah Simpan.')) return;
-    document.querySelectorAll('#team-edit input').forEach(input => { input.value = ''; });
+    document.querySelectorAll('#team-edit input[data-team]').forEach(input => { input.value = ''; });
+  });
+  $('#team-dec')?.addEventListener('click', () => {
+    const cur = Number($('#team-count-quick')?.value || normalizeConfig(admin.data.config).teamCount);
+    resizeBracketSlots(cur - 1, { toastPrefix: '-1 slot tim' });
+  });
+  $('#team-inc')?.addEventListener('click', () => {
+    const cur = Number($('#team-count-quick')?.value || normalizeConfig(admin.data.config).teamCount);
+    resizeBracketSlots(cur + 1, { toastPrefix: '+1 slot tim' });
+  });
+  $('#fit-filled-teams')?.addEventListener('click', fitBracketToFilledTeams);
+  $('#shuffle-teams-quick')?.addEventListener('click', shuffleTeamNamesQuick);
+  $('#team-count-quick')?.addEventListener('change', event => {
+    resizeBracketSlots(event.target.value);
+  });
+  $('#cfg-auto-fit')?.addEventListener('change', async event => {
+    const cfg = normalizeConfig(admin.data.config);
+    cfg.autoFitTeams = Boolean(event.target.checked);
+    admin.data.config = cfg;
+    writeCache(admin.data);
+    try {
+      await remoteWrite('config', 'PUT', cfg);
+      setSync(true);
+    } catch {
+      setSync(false);
+    }
+  });
+  document.querySelectorAll('[data-quick-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const count = Number(btn.dataset.quickPreset) || 58;
+      resizeBracketSlots(count, { toastPrefix: `Preset ${count} Tim` });
+    });
+  });
+  $('#team-edit').addEventListener('click', event => {
+    const delBtn = event.target.closest('[data-remove-seed]');
+    if (!delBtn) return;
+    event.preventDefault();
+    removeTeamSlot(Number(delBtn.dataset.removeSeed));
   });
 
   // Tab 2: Schedule & Dates
@@ -722,12 +1007,20 @@ function boot() {
   $('#shuffle-seeds').addEventListener('click', shuffleSeeds);
   $('#reset-structure').addEventListener('click', resetStructureDefault);
 
+  $('#cfg-team-count')?.addEventListener('change', () => {
+    const count = Number($('#cfg-team-count').value) || 58;
+    $('#cfg-structure-mode').value = count === 58 ? 'challonge58' : 'auto';
+    saveStructureConfig();
+  });
+  $('#cfg-structure-mode')?.addEventListener('change', saveStructureConfig);
+  $('#cfg-third-place')?.addEventListener('change', saveStructureConfig);
+
   document.querySelectorAll('[data-team-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
       const count = Number(btn.dataset.teamPreset) || 58;
       $('#cfg-team-count').value = count;
       $('#cfg-structure-mode').value = count === 58 ? 'challonge58' : 'auto';
-      showToast(`Jumlah tim diset ke ${count}. Klik Simpan Struktur Pertandingan untuk menerapkan.`);
+      saveStructureConfig();
     });
   });
 
